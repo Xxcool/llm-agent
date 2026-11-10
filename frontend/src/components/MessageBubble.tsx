@@ -176,18 +176,19 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
           )}
           {!streaming && message.content && (
             <div className="msg-actions">
-              <button className="msg-act" onClick={copyAll} title={copied ? '已复制' : '复制全文'}>
+              <button className="msg-act" onClick={copyAll} data-tip={copied ? '已复制' : '复制'} aria-label={copied ? '已复制' : '复制全文'}>
                 {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
               </button>
               {onRegenerate && (
-                <button className="msg-act" onClick={onRegenerate} title="重新生成">
+                <button className="msg-act" onClick={onRegenerate} data-tip="重新生成" aria-label="重新生成">
                   <IconRefresh size={14} />
                 </button>
               )}
               <button
                 className={`msg-act ${speaking ? 'active speaking-wave' : ''}`}
                 onClick={toggleSpeak}
-                title={speaking ? '停止朗读' : '朗读回复'}
+                data-tip={speaking ? '停止朗读' : '朗读'}
+                aria-label={speaking ? '停止朗读' : '朗读回复'}
               >
                 {speaking ? (
                   <span className="wave-bars" aria-hidden>
@@ -200,14 +201,16 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
               <button
                 className={`msg-act ${feedback?.type === 'up' ? 'active' : ''}`}
                 onClick={thumbUp}
-                title={message.dbId ? '有用' : '（新消息刷新后可反馈）'}
+                data-tip="喜欢"
+                aria-label="有用"
               >
                 <IconThumbUp size={14} />
               </button>
               <button
                 className={`msg-act ${feedback?.type === 'down' ? 'active' : ''}`}
                 onClick={thumbDown}
-                title="需改进"
+                data-tip="不喜欢"
+                aria-label="需改进"
               >
                 <IconThumbDown size={14} />
               </button>
