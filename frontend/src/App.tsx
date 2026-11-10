@@ -38,7 +38,7 @@ export default function App() {
 
   const isSession = path.startsWith('/c/')
   const sessionId = isSession ? path.slice(3) : null
-  const glass = Boolean(sessionId) || heroScrolled
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const isDemo = health?.provider === 'mock'
 
@@ -61,36 +61,39 @@ export default function App() {
     <div className="app">
       <GridBackdrop />
 
-      <header className="header">
-        <div className={`nav-pill ${glass ? 'glass' : ''}`}>
-          <button className="header-title" onClick={() => navigate('/')}>
-            <span className="logo"><IconBolt size={15} /></span>
-            <h1>LLM Agent 智能对话平台</h1>
-          </button>
-          <div className="header-actions">
-            <span className={`status-chip ${isDemo ? 'demo' : 'ok'}`}>
-              <span className="dot" />
-              {health ? (isDemo ? '演示模式' : '已接入') : '未连接'}
-            </span>
-            <button className="icon-btn" title="知识库管理" onClick={() => setShowKnowledge(true)}>
-              <IconBook size={15} />
-            </button>
-            <button className="icon-btn" title="接入模型服务" onClick={() => setShowSettings(true)}>
-              <IconApi size={15} />
-            </button>
-          </div>
-        </div>
-      </header>
-
       {isSession && sessionId ? (
         <div className="shell">
-          <Sidebar
-            activeId={sessionId}
-            onSelect={(id) => navigate(`/c/${id}`)}
-            onNew={(id) => navigate(`/c/${id}`)}
-            refreshSignal={sessionRefresh}
-          />
-          <div className="chat-page">
+          {sidebarOpen && (
+            <Sidebar
+              activeId={sessionId}
+              onSelect={(id) => navigate(`/c/${id}`)}
+              onNew={(id) => navigate(`/c/${id}`)}
+              refreshSignal={sessionRefresh}
+              onCollapse={() => setSidebarOpen(false)}
+              onOpenSettings={() => setShowSettings(true)}
+              onOpenKnowledge={() => setShowKnowledge(true)}
+              isDemo={Boolean(isDemo)}
+            />
+          )}
+          {!sidebarOpen && (
+            <div className="sb-float">
+              <button className="logo" onClick={() => navigate('/')} title="返回首页">
+                <IconBolt size={15} />
+              </button>
+              <button className="icon-btn" title="展开侧边栏" onClick={() => setSidebarOpen(true)}>
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
+                  <rect x="2" y="2.6" width="12" height="10.8" rx="2.2" stroke="currentColor" strokeWidth="1.3" />
+                  <path d="M6.2 2.8v10.4" stroke="currentColor" strokeWidth="1.3" />
+                </svg>
+              </button>
+              <button className="icon-btn" title="新会话" onClick={() => navigate('/')}>
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          )}
+          <div className={`chat-page ${sidebarOpen ? '' : 'no-sidebar'}`}>
             <ChatPage
               key={sessionId}
               sessionId={sessionId}
@@ -99,15 +102,37 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <Home
-          health={health}
-          isDemo={Boolean(isDemo)}
-          creating={creating}
-          onAsk={askOnHome}
-          onOpenSettings={() => setShowSettings(true)}
-          onOpenKnowledge={() => setShowKnowledge(true)}
-          onScrollChange={setHeroScrolled}
-        />
+        <>
+          <header className="header">
+            <div className={`nav-pill ${heroScrolled ? 'glass' : ''}`}>
+              <button className="header-title" onClick={() => navigate('/')}>
+                <span className="logo"><IconBolt size={15} /></span>
+                <h1>LLM Agent 智能对话平台</h1>
+              </button>
+              <div className="header-actions">
+                <span className={`status-chip ${isDemo ? 'demo' : 'ok'}`}>
+                  <span className="dot" />
+                  {health ? (isDemo ? '演示模式' : '已接入') : '未连接'}
+                </span>
+                <button className="icon-btn" title="知识库管理" onClick={() => setShowKnowledge(true)}>
+                  <IconBook size={15} />
+                </button>
+                <button className="icon-btn" title="接入模型服务" onClick={() => setShowSettings(true)}>
+                  <IconApi size={15} />
+                </button>
+              </div>
+            </div>
+          </header>
+          <Home
+            health={health}
+            isDemo={Boolean(isDemo)}
+            creating={creating}
+            onAsk={askOnHome}
+            onOpenSettings={() => setShowSettings(true)}
+            onOpenKnowledge={() => setShowKnowledge(true)}
+            onScrollChange={setHeroScrolled}
+          />
+        </>
       )}
 
       {showSettings && (

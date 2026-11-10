@@ -169,12 +169,9 @@ export function ChatPage({
         {messages.map((msg) => (
           <div key={msg.id} className={`turn ${msg.role}`}>
             {msg.role === 'assistant' && (
-              <div className="assistant-row">
-                <div className="avatar">AI</div>
-                <div className="assistant-body">
-                  {msg.steps.length > 0 && <ToolTimeline steps={msg.steps} />}
-                  <MessageBubble message={msg} streaming={msg.id === typingId} />
-                </div>
+              <div className="assistant-body">
+                {msg.steps.length > 0 && <ToolTimeline steps={msg.steps} />}
+                <MessageBubble message={msg} streaming={msg.id === typingId} />
               </div>
             )}
             {msg.role === 'user' && <MessageBubble message={msg} streaming={false} />}
