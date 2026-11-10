@@ -200,7 +200,7 @@ export function PlanCard({
           </>
         )}
         {plan.status === 'confirmed' && (
-          <span className="plan-hint">已确认。任务拆解与执行将在 P3 行动层开放。</span>
+          <span className="plan-hint">已确认。可在下方任务清单中拆解为任务并逐项执行。</span>
         )}
         {dimmed && (
           <button className="btn ghost small" disabled={busy || !dbId} onClick={() => update('draft')}>

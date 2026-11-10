@@ -10,6 +10,8 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "glm-4-flash")
 # provider = openai（OpenAI 兼容）| mock（离线测试）
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+# 单次模型调用超时（秒）：方案/任务交付物等长文本生成需要更宽裕的时间
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "180"))
 
 # Embedding：auto = 优先 fastembed 本地模型，失败降级 hash 向量（零依赖可跑）
 EMBED_BACKEND = os.getenv("EMBED_BACKEND", "auto")

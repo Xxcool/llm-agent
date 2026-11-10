@@ -36,6 +36,20 @@ class ChatStore:
               created_at TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+            CREATE TABLE IF NOT EXISTS tasks (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              session_id TEXT,
+              message_id INTEGER,
+              plan_id TEXT,
+              title TEXT,
+              detail TEXT,
+              output TEXT,
+              status TEXT DEFAULT 'pending',
+              artifact TEXT,
+              created_at TEXT,
+              updated_at TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_tasks_session ON tasks(session_id);
             """
         )
         self.conn.commit()
@@ -111,6 +125,7 @@ class ChatStore:
     def delete_session(self, sid: str) -> None:
         with self._lock:
             self.conn.execute("DELETE FROM messages WHERE session_id=?", (sid,))
+            self.conn.execute("DELETE FROM tasks WHERE session_id=?", (sid,))
             self.conn.execute("DELETE FROM sessions WHERE id=?", (sid,))
             self.conn.commit()
 
@@ -159,7 +174,8 @@ class ChatStore:
 
         with self._lock:
             row = self.conn.execute(
-                "SELECT id, role, content, steps, feedback, plan, created_at FROM messages WHERE id=?",
+                "SELECT id, role, content, steps, feedback, plan, created_at, session_id "
+                "FROM messages WHERE id=?",
                 (mid,),
             ).fetchone()
         if not row:
@@ -172,6 +188,7 @@ class ChatStore:
             "feedback": json.loads(row[4]) if row[4] else None,
             "plans": normalize_plan_list(json.loads(row[5]) if row[5] else None),
             "created_at": row[6],
+            "session_id": row[7],
         }
 
     def update_plans(self, mid: int, plans: list) -> Optional[list]:
@@ -236,3 +253,86 @@ class ChatStore:
                 (sid, limit),
             ).fetchall()
         return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+
+    # ---------- 任务（P3 行动层） ----------
+
+    _TASK_COLS = "id, session_id, message_id, plan_id, title, detail, output, status, artifact, created_at, updated_at"
+
+    @staticmethod
+    def _task_row(r) -> dict:
+        return {
+            "id": r[0],
+            "session_id": r[1],
+            "message_id": r[2],
+            "plan_id": r[3],
+            "title": r[4],
+            "detail": r[5],
+            "output": r[6],
+            "status": r[7],
+            "artifact": r[8],
+            "created_at": r[9],
+            "updated_at": r[10],
+        }
+
+    def add_tasks(self, sid: str, message_id: int, tasks: List[dict]) -> List[dict]:
+        """批量写入方案拆解出的任务（同一消息重新拆解时先清理旧任务）。"""
+        now = _now()
+        with self._lock:
+            self.conn.execute(
+                "DELETE FROM tasks WHERE message_id=? AND status!='done'", (message_id,)
+            )
+            ids = []
+            for t in tasks:
+                cur = self.conn.execute(
+                    "INSERT INTO tasks (session_id, message_id, plan_id, title, detail, output, status, created_at, updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (
+                        sid, message_id, t["plan_id"], t["title"], t.get("detail", ""),
+                        t.get("output", ""), t.get("status", "pending"), now, now,
+                    ),
+                )
+                ids.append(cur.lastrowid)
+            self.conn.commit()
+            rows = [
+                self.conn.execute(
+                    f"SELECT {self._TASK_COLS} FROM tasks WHERE id=?", (i,)
+                ).fetchone()
+                for i in ids
+            ]
+        return [self._task_row(r) for r in rows if r]
+
+    def list_tasks(self, sid: str) -> List[dict]:
+        with self._lock:
+            rows = self.conn.execute(
+                f"SELECT {self._TASK_COLS} FROM tasks WHERE session_id=? ORDER BY id", (sid,)
+            ).fetchall()
+        return [self._task_row(r) for r in rows]
+
+    def get_task(self, tid: int) -> Optional[dict]:
+        with self._lock:
+            row = self.conn.execute(
+                f"SELECT {self._TASK_COLS} FROM tasks WHERE id=?", (tid,)
+            ).fetchone()
+        return self._task_row(row) if row else None
+
+    def update_task(self, tid: int, status: str, artifact: Optional[str] = None) -> Optional[dict]:
+        now = _now()
+        with self._lock:
+            if artifact is None:
+                cur = self.conn.execute(
+                    "UPDATE tasks SET status=?, updated_at=? WHERE id=?", (status, now, tid)
+                )
+            else:
+                cur = self.conn.execute(
+                    "UPDATE tasks SET status=?, artifact=?, updated_at=? WHERE id=?",
+                    (status, artifact, now, tid),
+                )
+            self.conn.commit()
+        if cur.rowcount == 0:
+            return None
+        return self.get_task(tid)
+
+    def delete_tasks_of_message(self, message_id: int) -> None:
+        with self._lock:
+            self.conn.execute("DELETE FROM tasks WHERE message_id=?", (message_id,))
+            self.conn.commit()

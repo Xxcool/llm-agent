@@ -44,7 +44,7 @@ class OpenAICompatProvider(BaseProvider):
             f"{self.base_url}/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json=payload,
-            timeout=60,
+            timeout=config.LLM_TIMEOUT,
         )
         resp.raise_for_status()
         msg = resp.json()["choices"][0]["message"]

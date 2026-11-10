@@ -99,6 +99,24 @@ export interface ChatMessage {
   plans?: Plan[]
 }
 
+/** 任务（P3 行动层）：由已确认方案拆解而来 */
+export type TaskStatus = 'pending' | 'running' | 'done' | 'failed'
+
+export interface Task {
+  id: number
+  session_id: string
+  message_id: number
+  plan_id: string
+  title: string
+  detail: string
+  output: string
+  status: TaskStatus
+  /** 执行产出的 Markdown 交付物 */
+  artifact: string | null
+  created_at?: string
+  updated_at?: string
+}
+
 export interface HealthInfo {
   status: string
   provider: string

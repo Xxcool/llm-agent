@@ -1,4 +1,4 @@
-import type { AgentEvent, HealthInfo, MessageFeedback, Plan, PlanStatus } from './types'
+import type { AgentEvent, HealthInfo, MessageFeedback, Plan, PlanStatus, Task } from './types'
 import type { ToolStep } from './types'
 
 /**
@@ -301,4 +301,39 @@ export async function updatePlanStatus(
   }
   const data = (await resp.json()) as { plans: Plan[] }
   return data.plans
+}
+
+// ---------- 任务（P3 行动层） ----------
+
+/** 把已确认方案拆解为任务（幂等） */
+export async function breakdownTasks(messageId: number, planId?: string): Promise<Task[]> {
+  const resp = await fetch(`/api/messages/${messageId}/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ plan_id: planId }),
+  })
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
+    throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
+  }
+  const data = (await resp.json()) as { tasks: Task[] }
+  return data.tasks
+}
+
+export async function listTasks(sessionId: string): Promise<Task[]> {
+  const resp = await fetch(`/api/sessions/${sessionId}/tasks`)
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = (await resp.json()) as { tasks: Task[] }
+  return data.tasks
+}
+
+/** 执行单个任务，产出 Markdown 交付物 */
+export async function runTask(taskId: number): Promise<Task> {
+  const resp = await fetch(`/api/tasks/${taskId}/run`, { method: 'POST' })
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
+    throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
+  }
+  const data = (await resp.json()) as { task: Task }
+  return data.task
 }

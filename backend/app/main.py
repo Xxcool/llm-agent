@@ -476,6 +476,99 @@ def delete_session(sid: str):
     return {"status": "ok"}
 
 
+# ---------- 任务（P3 行动层 M3：拆解 / 看板 / 执行） ----------
+
+class TaskBreakdownIn(BaseModel):
+    plan_id: Optional[str] = None
+
+
+def _confirmed_plan(msg: dict, plan_id: Optional[str]) -> dict:
+    """取该消息里「已确认」的方案；未确认不允许拆解任务（人工确认闸门）。"""
+    plans = msg.get("plans") or []
+    target = None
+    if plan_id:
+        target = next((p for p in plans if p.get("id") == plan_id), None)
+    else:
+        target = next((p for p in plans if p.get("status") == "confirmed"), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="未找到方案")
+    if target.get("status") != "confirmed":
+        raise HTTPException(status_code=400, detail="方案尚未确认，不能拆解任务")
+    return target
+
+
+@app.get("/api/sessions/{sid}/tasks")
+def list_tasks(sid: str):
+    return {"tasks": _ensure_store().list_tasks(sid)}
+
+
+@app.post("/api/messages/{mid}/tasks")
+def breakdown_tasks(mid: int, body: TaskBreakdownIn):
+    """把已确认方案拆解为任务（幂等：已有未完成任务时直接返回）。"""
+    from .tasks import breakdown_prompt, normalize_tasks, parse_json_array
+
+    store = _ensure_store()
+    msg = store.get_message(mid)
+    if not msg:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    plan = _confirmed_plan(msg, body.plan_id)
+    existing = [t for t in store.list_tasks(msg["session_id"]) if t["message_id"] == mid]
+    if existing:
+        return {"tasks": existing, "cached": True}
+
+    try:
+        resp = _provider.chat([{"role": "user", "content": breakdown_prompt(plan)}])
+        tasks = normalize_tasks(parse_json_array(resp.content), plan["id"])
+    except Exception as e:  # noqa: BLE001 拆解失败以人话返回
+        from .agent import _provider_error_message
+
+        raise HTTPException(status_code=502, detail=f"任务拆解失败：{_provider_error_message(e)}") from e
+
+    saved = store.add_tasks(msg["session_id"], mid, tasks)
+    return {"tasks": saved, "cached": False}
+
+
+@app.post("/api/tasks/{tid}/run")
+def run_task(tid: int):
+    """执行单个任务：基于方案 + 知识库检索片段产出 Markdown 交付物。"""
+    from .agent import _provider_error_message
+    from .tasks import run_prompt
+
+    store = _ensure_store()
+    task = store.get_task(tid)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    msg = store.get_message(task["message_id"])
+    if not msg:
+        raise HTTPException(status_code=404, detail="所属消息不存在")
+    plan = next((p for p in (msg.get("plans") or []) if p.get("id") == task["plan_id"]), None)
+    if not plan:
+        raise HTTPException(status_code=404, detail="方案不存在")
+    if plan.get("status") != "confirmed":
+        raise HTTPException(status_code=400, detail="方案未确认，不能执行任务")
+
+    # 检索任务相关依据，避免执行产出脱离知识库
+    context = ""
+    try:
+        hits = _ensure_state().search(task["title"] + " " + (task.get("detail") or ""))
+        hits = [h for h in hits if h[2] >= config.SCORE_THRESHOLD]
+        context = "\n---\n".join(f"[{s}] {t}" for s, t, _ in hits)
+    except Exception:  # noqa: BLE001 检索失败不阻塞执行
+        context = ""
+
+    store.update_task(tid, "running")
+    try:
+        resp = _provider.chat([{"role": "user", "content": run_prompt(plan, task, context)}])
+        artifact = (resp.content or "").strip()
+        if not artifact:
+            raise RuntimeError("模型未返回交付内容")
+        updated = store.update_task(tid, "done", artifact)
+        return {"status": "ok", "task": updated}
+    except Exception as e:  # noqa: BLE001
+        store.update_task(tid, "failed")
+        raise HTTPException(status_code=502, detail=f"任务执行失败：{_provider_error_message(e)}") from e
+
+
 # ---------- 对话 ----------
 
 @app.post("/api/chat")

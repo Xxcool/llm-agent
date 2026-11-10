@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { createSession, getSession, getSessionMessages, streamChat } from '../api'
-import type { ChatMessage, ToolStep } from '../types'
+import { createSession, getSession, getSessionMessages, listTasks, streamChat } from '../api'
+import type { ChatMessage, Task, ToolStep } from '../types'
 import { MessageBubble } from '../components/MessageBubble'
 import { Composer } from '../components/Composer'
 import { ToolTimeline } from '../components/ToolTimeline'
 import { PlanGroup } from '../components/PlanGroup'
+import { TaskBoard } from '../components/TaskBoard'
 import { IconBolt } from '../components/icons'
 
 let nextId = 1
@@ -30,6 +31,8 @@ export function ChatPage({
   const [knowledgeOn, setKnowledgeOn] = useState(true)
   const [webOn, setWebOn] = useState(true)
   const [planMode, setPlanMode] = useState(false)
+  // 任务按消息 id 分组（P3 行动层）
+  const [tasksByMsg, setTasksByMsg] = useState<Record<number, Task[]>>({})
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -78,6 +81,19 @@ export function ChatPage({
       .catch(() => setMessages([]))
   }
 
+  /** 加载会话内任务并按消息分组（任务看板数据） */
+  const loadTasks = (sid: string) => {
+    listTasks(sid)
+      .then((tasks) => {
+        const grouped: Record<number, Task[]> = {}
+        for (const t of tasks) {
+          grouped[t.message_id] = [...(grouped[t.message_id] ?? []), t]
+        }
+        setTasksByMsg(grouped)
+      })
+      .catch(() => setTasksByMsg({}))
+  }
+
   const sendRef = useRef<(text: string) => void>(() => undefined)
 
   useEffect(() => {
@@ -119,6 +135,9 @@ export function ChatPage({
           if (!cancelled) setTitle(s.title)
         })
         .catch(() => undefined)
+
+      // 任务看板数据（按消息分组）
+      loadTasks(sessionId)
     }
     return () => {
       cancelled = true
@@ -337,6 +356,20 @@ export function ChatPage({
                       }
                     />
                   )}
+                  {msg.dbId && (() => {
+                    const confirmedPlan = msg.plans?.find((p) => p.status === 'confirmed')
+                    const tasks = tasksByMsg[msg.dbId!] ?? []
+                    if (!confirmedPlan && tasks.length === 0) return null
+                    const mid = msg.dbId!
+                    return (
+                      <TaskBoard
+                        messageId={mid}
+                        planId={confirmedPlan?.id}
+                        tasks={tasks}
+                        onTasks={(list) => setTasksByMsg((prev) => ({ ...prev, [mid]: list }))}
+                      />
+                    )
+                  })()}
                   <MessageBubble
                     message={msg}
                     streaming={msg.id === typingId}
