@@ -11,6 +11,11 @@ CHUNK_SIZE = 500  # 字符
 CHUNK_OVERLAP = 50
 
 
+def _escape_like(value: str) -> str:
+    """转义 SQLite LIKE 通配符，避免文件名中的 % / _ 误删其他文档分块。"""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _chunks(text: str) -> List[str]:
     paras = [p.strip() for p in text.replace("\r\n", "\n").split("\n") if p.strip()]
     merged, buf = [], ""
@@ -57,7 +62,7 @@ class RagStore:
             }
             stale = [
                 r[0] for r in self.conn.execute("SELECT DISTINCT source FROM chunks").fetchall()
-                if r[0].split(":")[0] not in live
+                if r[0].rsplit(":", 1)[0] not in live
             ]
             for sig in stale:
                 self.conn.execute("DELETE FROM chunks WHERE source=?", (sig,))
@@ -74,7 +79,10 @@ class RagStore:
                 ).fetchone()[0]
                 if row:
                     continue
-                self.conn.execute("DELETE FROM chunks WHERE source LIKE ?", (f"{rel}:%",))
+                self.conn.execute(
+                    "DELETE FROM chunks WHERE source LIKE ? ESCAPE '\\'",
+                    (f"{_escape_like(str(rel))}:%",),
+                )
                 text = f.read_text(encoding="utf-8")
                 chunks = _chunks(text)
                 vecs = self.embedder.embed(chunks)
@@ -92,12 +100,15 @@ class RagStore:
         rows = self.conn.execute(
             "SELECT source, COUNT(*) FROM chunks GROUP BY source ORDER BY source"
         ).fetchall()
-        return [(s.split(":")[0], int(c)) for s, c in rows]
+        return [(s.rsplit(":", 1)[0], int(c)) for s, c in rows]
 
     def delete_source(self, rel: str) -> int:
         """删除某文档的全部分块，返回删除数。"""
         with self._lock:
-            cur = self.conn.execute("DELETE FROM chunks WHERE source LIKE ?", (f"{rel}:%",))
+            cur = self.conn.execute(
+                "DELETE FROM chunks WHERE source LIKE ? ESCAPE '\\'",
+                (f"{_escape_like(rel)}:%",),
+            )
             self.conn.commit()
         return cur.rowcount
 
@@ -110,4 +121,4 @@ class RagStore:
             score = sum(a * b for a, b in zip(qv, v))
             best.append((source, text, score))
         best.sort(key=lambda x: -x[2])
-        return [(s.split(":")[0], t, round(sc, 4)) for s, t, sc in best[:top_k]]
+        return [(s.rsplit(":", 1)[0], t, round(sc, 4)) for s, t, sc in best[:top_k]]

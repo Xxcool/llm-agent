@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.llm import ChatResponse  # noqa: E402
 from app.main import app  # noqa: E402
 
 client = TestClient(app)
@@ -207,3 +208,45 @@ def test_tts_failure_returns_502(tmp_app, monkeypatch):
     r = client.get("/api/tts", params={"text": "测试失败降级"})
     assert r.status_code == 502
     assert client.get("/api/tts", params={"text": "   "}).status_code == 400
+
+
+def test_chat_does_not_duplicate_current_user_message(tmp_app):
+    """多轮对话的历史里不能重复出现本轮用户消息（回归：每轮重复注入）。"""
+    class CaptureProvider:
+        name = "capture"
+
+        def __init__(self):
+            self.calls = []
+
+        def chat(self, messages, tools=None):
+            self.calls.append([dict(m) for m in messages])
+            return ChatResponse(content="收到")
+
+    provider = CaptureProvider()
+    tmp_app._provider = provider
+    sid = client.post("/api/sessions").json()["id"]
+    client.post("/api/chat", json={"message": "第一句", "session_id": sid, "allow_fetch": False})
+    client.post("/api/chat", json={"message": "第二句", "session_id": sid, "allow_fetch": False})
+
+    users = [m["content"] for m in provider.calls[-1] if m["role"] == "user"]
+    assert users == ["第一句", "第二句"]
+    client.delete(f"/api/sessions/{sid}")
+
+
+def test_delete_knowledge_rejects_sibling_prefix_path(tmp_app):
+    """删除接口必须按路径语义校验，不能把 knowledge_evil/ 当成 knowledge/ 的子路径。"""
+    sibling = tmp_app.KNOWLEDGE_ROOT.parent / "knowledge_evil"
+    sibling.mkdir()
+    secret = sibling / "secret.md"
+    secret.write_text("不能删除我", encoding="utf-8")
+
+    r = client.delete("/api/knowledge", params={"source": "../knowledge_evil/secret.md"})
+    assert r.status_code == 400
+    assert secret.read_text(encoding="utf-8") == "不能删除我"
+
+
+def test_make_provider_respects_mock_mode(tmp_app, monkeypatch):
+    """LLM_PROVIDER=mock 时应强制离线，即使环境里残留了 Key。"""
+    monkeypatch.setattr(tmp_app.config, "LLM_PROVIDER", "mock")
+    monkeypatch.setattr(tmp_app.config, "LLM_API_KEY", "sk-test")
+    assert tmp_app._make_provider().name == "mock"

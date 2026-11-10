@@ -19,7 +19,7 @@ ALLOWED_EXT = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".css", ".html", ".sql",
 }
 MAX_FILE_BYTES = 200_000
-MAX_FILES = 12
+MAX_FILES = 6  # 与产品文档、模型提示词保持一致
 
 
 def _s(value: Any, limit: int = 600) -> str:
@@ -136,8 +136,9 @@ def code_run_prompt(plan: Dict[str, Any], task: Dict[str, Any], context: str) ->
 
 def safe_relpath(rel: str) -> Path:
     """校验相对路径：禁止绝对路径/上级穿越/非法扩展名，返回规范化的相对路径。"""
-    raw = (rel or "").replace("\\", "/").strip().lstrip("/")
-    if not raw or ".." in raw.split("/"):
+    raw = (rel or "").replace("\\", "/").strip()
+    # 绝对路径必须拒绝（包括 Windows 盘符），不能先 lstrip("/") 静默改成相对路径
+    if not raw or raw.startswith("/") or re.match(r"^[A-Za-z]:", raw) or ".." in raw.split("/"):
         raise ValueError(f"非法文件路径：{rel}")
     p = Path(raw)
     if p.is_absolute() or p.suffix.lower() not in ALLOWED_EXT:

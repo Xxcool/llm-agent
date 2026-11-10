@@ -2,13 +2,15 @@
 import sys
 from pathlib import Path
 
+import pytest  # noqa: E402
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import config  # noqa: E402
 from app.agent import run_agent  # noqa: E402
 from app.llm import MockProvider  # noqa: E402
 from app.rag import RagStore  # noqa: E402
-from app.tools import ToolExecutor  # noqa: E402
+from app.tools import ToolExecutor, fetch_text, validate_public_url  # noqa: E402
 
 
 def make_store(tmp_path):
@@ -72,3 +74,43 @@ def test_fetch_url_rejects_non_http(tmp_path):
     store, _ = make_store(tmp_path)
     executor = ToolExecutor(store)
     assert "仅支持" in executor.run("fetch_url", {"url": "file:///etc/passwd"})
+
+
+def test_validate_public_url_blocks_internal_targets():
+    """SSRF 防护：内网、回环、链路本地、保留地址与 file:// 全部拒绝。"""
+    for url in (
+        "file:///etc/passwd",
+        "http://127.0.0.1/",
+        "http://10.0.0.1/",
+        "http://169.254.169.254/latest/meta-data",
+        "http://[::1]/",
+        "http://localhost/",
+        "http://user:pass@127.0.0.1/",
+    ):
+        with pytest.raises(ValueError):
+            validate_public_url(url)
+
+
+def test_validate_public_url_allows_public_ip():
+    validate_public_url("http://93.184.216.34/")
+
+
+def test_fetch_text_rejects_redirect_to_private(monkeypatch):
+    """首跳公网、302 跳到内网时必须拦截，不能跟随。"""
+    calls = []
+
+    class FakeResponse:
+        is_redirect = True
+        headers = {"location": "http://127.0.0.1/secret"}
+
+        def close(self):
+            return None
+
+    def fake_get(url, **kwargs):
+        calls.append(url)
+        return FakeResponse()
+
+    monkeypatch.setattr("app.tools.httpx.get", fake_get)
+    with pytest.raises(ValueError, match="内网"):
+        fetch_text("http://93.184.216.34/")
+    assert calls == ["http://93.184.216.34/"]

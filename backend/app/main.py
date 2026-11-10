@@ -55,6 +55,9 @@ def _save_runtime(cfg: dict) -> None:
 
 def _make_provider() -> BaseProvider:
     """优先用运行时配置（前端设置面板），否则按环境变量；无 Key 时降级 Mock 演示模式。"""
+    # LLM_PROVIDER=mock 时强制离线，避免环境里残留的 Key 让演示模式意外发起真实调用
+    if config.LLM_PROVIDER == "mock":
+        return MockProvider()
     rt = _load_runtime()
     base_url = rt.get("base_url") or config.LLM_BASE_URL
     api_key = rt.get("api_key") or config.LLM_API_KEY
@@ -358,9 +361,13 @@ def import_urls(body: UrlImportIn):
 def delete_knowledge(source: str):
     """按相对路径删除文档（同时删文件与已入库分块）。"""
     _ensure_state()
+    root = KNOWLEDGE_ROOT.resolve()
     target = (KNOWLEDGE_ROOT / source).resolve()
-    if not str(target).startswith(str(KNOWLEDGE_ROOT.resolve())):
+    # 必须用路径语义判断，不能用 startswith：knowledge_evil/ 会绕过前缀检查
+    if not source.strip() or not target.is_relative_to(root):
         raise HTTPException(400, "非法路径")
+    if target == root or target.is_dir():
+        raise HTTPException(400, "只能删除知识库中的文件")
     removed = _rag.delete_source(source)
     if target.is_file():
         target.unlink()
@@ -507,6 +514,7 @@ def breakdown_tasks(mid: int, body: TaskBreakdownIn):
     """把已确认方案拆解为任务（幂等：已有未完成任务时直接返回）。"""
     from .tasks import breakdown_prompt, normalize_tasks, parse_json_array
 
+    _ensure_state()  # 直接调 API（未经 /api/health）时也要先初始化 provider
     store = _ensure_store()
     msg = store.get_message(mid)
     if not msg:
@@ -590,6 +598,8 @@ def apply_task_files(tid: int):
     task = store.get_task(tid)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+    if task.get("status") != "review":
+        raise HTTPException(status_code=400, detail="任务不在待审批状态，不能批准落盘")
     files = task.get("files") or []
     if not files:
         raise HTTPException(status_code=400, detail="该任务没有待落盘文件")
@@ -611,6 +621,8 @@ def discard_task_files(tid: int):
     task = store.get_task(tid)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+    if task.get("status") != "review":
+        raise HTTPException(status_code=400, detail="任务不在待审批状态，不能丢弃")
     updated = store.update_task(tid, "pending", files=[])
     return {"status": "ok", "task": updated}
 
@@ -624,8 +636,10 @@ def chat(body: ChatIn):
     history: list = []
 
     if body.session_id:
-        store.add_message(body.session_id, "user", body.message)
+        # 先取历史（不含本轮），再落库本轮用户消息；否则同一句话会进入
+        # history 后又被 run_agent 追加一次，导致模型上下文重复。
         history = store.history(body.session_id)
+        store.add_message(body.session_id, "user", body.message)
 
     def gen():
         content_parts: list = []

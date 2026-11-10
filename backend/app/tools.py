@@ -1,5 +1,8 @@
 """工具集：Function Calling 的 schema 与实现。"""
+import ipaddress
 import re
+import socket
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
@@ -125,14 +128,85 @@ class ToolExecutor:
         return f"未知工具：{name}"
 
 
+MAX_REDIRECTS = 5
+
+
+def validate_public_url(url: str) -> None:
+    """校验抓取目标：仅 http/https，且域名解析出的地址必须是公网地址。
+
+    防 SSRF：拒绝 localhost、内网、链路本地（如云元数据 169.254.169.254）、
+    保留地址等；用户信息（user:pass@host）也拒绝，避免目标歧义。
+    """
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("仅支持 http/https 链接")
+    if parsed.username or parsed.password:
+        raise ValueError("链接不能包含用户名或密码")
+    host = parsed.hostname
+    if not host:
+        raise ValueError("链接缺少域名")
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as e:
+        raise ValueError("链接端口非法") from e
+
+    try:
+        addrs = [ipaddress.ip_address(host)]
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        except socket.gaierror as e:
+            raise ValueError(f"域名无法解析：{host}") from e
+        addrs = []
+        for info in infos:
+            try:
+                addrs.append(ipaddress.ip_address(info[4][0]))
+            except ValueError:
+                continue
+    if not addrs:
+        raise ValueError("域名没有可用地址")
+
+    for ip in addrs:
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+            or not ip.is_global
+        ):
+            raise ValueError("不允许访问内网或保留地址")
+
+
+def _get_with_safe_redirects(url: str) -> httpx.Response:
+    """手动跟随重定向，每跳都重新做公网校验，避免 302 跳到内网。"""
+    current = url
+    for _ in range(MAX_REDIRECTS + 1):
+        validate_public_url(current)
+        resp = httpx.get(
+            current,
+            timeout=config.FETCH_URL_TIMEOUT,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; llm-agent-platform/0.1)"},
+            follow_redirects=False,
+        )
+        if resp.is_redirect:
+            location = resp.headers.get("location")
+            resp.close()
+            if not location:
+                raise ValueError("重定向缺少 Location")
+            current = urljoin(current, location)
+            continue
+        resp.raise_for_status()
+        return resp
+    raise ValueError("重定向次数过多")
+
+
 def fetch_text(url: str, limit: int = 4000) -> str:
     """抓取网页并转纯文本（去 script/style/标签），供工具与链接导入共用。"""
-    if not url.startswith(("http://", "https://")):
-        raise ValueError("仅支持 http/https 链接")
-    resp = httpx.get(url, timeout=config.FETCH_URL_TIMEOUT,
-                     headers={"User-Agent": "Mozilla/5.0 (compatible; llm-agent-platform/0.1)"},
-                     follow_redirects=True)
-    resp.raise_for_status()
+    resp = _get_with_safe_redirects(url)
     text = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", resp.text)
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text).strip()

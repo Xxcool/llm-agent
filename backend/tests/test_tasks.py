@@ -91,7 +91,7 @@ def test_code_files_path_safety():
     good = parse_code_files(CODE_JSON)
     assert [f["path"] for f in good["files"]] == ["scripts/check_rules.py", "config/rules.json"]
 
-    for bad_path in ("../evil.py", "/etc/passwd", "run.sh", "a.exe"):
+    for bad_path in ("../evil.py", "/etc/passwd", "/etc/passwd.md", "C:/tmp/evil.md", "C:evil.md", "run.sh", "a.exe"):
         bad = json.dumps({"summary": "x", "files": [{"path": bad_path, "content": "x"}]}, ensure_ascii=False)
         with pytest.raises(ValueError):
             parse_code_files(bad)
@@ -147,6 +147,10 @@ def test_code_task_diff_review_then_apply(tmp_app):
     tasks = client.post(f"/api/messages/{mid}/tasks", json={"plan_id": pid}).json()["tasks"]
     code_task = next(t for t in tasks if t["kind"] == "code")
 
+    # 未进入 review 前，apply / discard 都必须被状态守卫拒绝
+    assert client.post(f"/api/tasks/{code_task['id']}/apply").status_code == 400
+    assert client.post(f"/api/tasks/{code_task['id']}/discard").status_code == 400
+
     # 执行 → 进入 review，带 diff，但文件尚未落盘
     r = client.post(f"/api/tasks/{code_task['id']}/run")
     assert r.status_code == 200
@@ -165,6 +169,9 @@ def test_code_task_diff_review_then_apply(tmp_app):
     assert all(c["ok"] for c in r2.json()["checks"])
     assert (workspace / "scripts/check_rules.py").is_file()
     assert r2.json()["task"]["status"] == "done"
+    # 已落盘后不能重复 apply，也不能用 discard 把 done 重置回 pending
+    assert client.post(f"/api/tasks/{code_task['id']}/apply").status_code == 400
+    assert client.post(f"/api/tasks/{code_task['id']}/discard").status_code == 400
 
     # 再次执行同一任务 → diff 显示为修改（exists=True）
     r3 = client.post(f"/api/tasks/{code_task['id']}/run")
@@ -174,3 +181,12 @@ def test_code_task_diff_review_then_apply(tmp_app):
     assert r4.json()["task"]["status"] == "pending"
     assert r4.json()["task"]["files"] == []
     client.delete(f"/api/sessions/{sid}")
+
+
+def test_code_files_max_six_matches_docs(tmp_path):
+    """文档/提示词承诺单任务最多 6 个文件，后端必须同样限制。"""
+    files = [{"path": f"f{i}.md", "content": "x"} for i in range(6)]
+    assert len(parse_code_files(json.dumps({"files": files}, ensure_ascii=False))["files"]) == 6
+    files.append({"path": "f6.md", "content": "x"})
+    with pytest.raises(ValueError, match="文件数量超过上限"):
+        parse_code_files(json.dumps({"files": files}, ensure_ascii=False))

@@ -62,3 +62,17 @@ def test_delete_source(tmp_path):
     removed = rag.delete_source("a.md")
     assert removed > 0
     assert [s for s, _ in rag.sources()] == ["b.md"]
+
+
+def test_delete_source_escapes_like_wildcards(tmp_path):
+    """文件名中的 % / _ 不能被 SQLite LIKE 当成通配符误删其他文档。"""
+    rag = make_rag(tmp_path)
+    kb = tmp_path / "kb"
+    kb.mkdir()
+    (kb / "a_b.md").write_text("下划线文档内容", encoding="utf-8")
+    (kb / "axb.md").write_text("普通文档内容", encoding="utf-8")
+    rag.ingest_dir(kb)
+    assert rag.delete_source("%") == 0
+    assert len(rag.sources()) == 2
+    assert rag.delete_source("a_b.md") > 0
+    assert [s for s, _ in rag.sources()] == ["axb.md"]
