@@ -5,3 +5,4 @@ sse-starlette>=2.1
 fastembed>=0.4
 pytest>=8.0
 python-multipart
+edge-tts>=7.0

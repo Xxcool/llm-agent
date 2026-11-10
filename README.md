@@ -74,6 +74,7 @@ LLM_MODEL=deepseek-chat
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/health` | 服务状态、当前模型与知识库分块数 |
+| GET | `/api/tts` | 文本转语音（Edge 神经语音 MP3，默认晓晓；前端朗读失败自动降级浏览器 TTS） |
 | POST | `/api/chat` | SSE 对话（`message` / `session_id` / `force_retrieval` / `allow_fetch`），携带 `session_id` 时自动持久化 |
 | POST | `/api/sessions` | 创建会话 |
 | GET | `/api/sessions` | 会话列表（按最近更新排序） |

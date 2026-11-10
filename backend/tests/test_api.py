@@ -124,3 +124,40 @@ def test_chat_error_persisted_as_content(tmp_app):
 def test_knowledge_upload_rejects_bad_type(tmp_app):
     r = client.post("/api/knowledge/upload", files={"file": ("x.exe", b"bin", "application/octet-stream")})
     assert r.status_code == 400
+
+
+def test_tts_synthesizes_and_caches(tmp_app, monkeypatch):
+    """/api/tts：合成成功返回 MP3 + 缓存命中，失败 502，前端据此降级本地 TTS。"""
+    import app.main as m
+
+    calls = []
+
+    async def fake_synth(text: str, voice: str) -> bytes:
+        calls.append((text, voice))
+        return b"FAKE_MP3_" + text.encode("utf-8")
+
+    monkeypatch.setattr(m, "_tts_synth", fake_synth)
+    r = client.get("/api/tts", params={"text": "你好世界"})
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("audio/mpeg")
+    assert r.content == b"FAKE_MP3_" + "你好世界".encode("utf-8")
+    # 相同文本 + 音色 → 缓存命中，不再调用合成
+    r2 = client.get("/api/tts", params={"text": "你好世界"})
+    assert r2.content == r.content
+    assert len(calls) == 1
+    # 不同音色 → 重新合成
+    client.get("/api/tts", params={"text": "你好世界", "voice": "zh-CN-YunxiNeural"})
+    assert any(v == "zh-CN-YunxiNeural" for _, v in calls)
+
+
+def test_tts_failure_returns_502(tmp_app, monkeypatch):
+    """合成服务异常 → 502（前端降级浏览器 TTS），空文本 → 400。"""
+    import app.main as m
+
+    async def broken(text: str, voice: str) -> bytes:
+        raise RuntimeError("网络不可达")
+
+    monkeypatch.setattr(m, "_tts_synth", broken)
+    r = client.get("/api/tts", params={"text": "测试失败降级"})
+    assert r.status_code == 502
+    assert client.get("/api/tts", params={"text": "   "}).status_code == 400

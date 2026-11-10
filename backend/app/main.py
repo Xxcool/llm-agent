@@ -1,5 +1,6 @@
 """FastAPI 入口：SSE 对话 + 运行时 LLM 配置 + 知识库管理。"""
 import hashlib
+import io
 import json
 import re
 import shutil
@@ -9,6 +10,7 @@ from typing import Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -122,6 +124,51 @@ def health():
     _health_cache["ts"] = now
     _health_cache["data"] = data
     return data
+
+
+# ---------- TTS 朗读（Edge 神经语音，比浏览器 SpeechSynthesis 自然得多） ----------
+
+_TTS_DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"  # 晓晓：自然亲切的女声
+_TTS_TEXT_LIMIT = 3000
+_tts_cache: dict[str, bytes] = {}
+_TTS_CACHE_MAX = 50
+
+
+async def _tts_synth(text: str, voice: str) -> bytes:
+    """调用 Edge TTS 合成 MP3（独立函数便于测试替换）。"""
+    import edge_tts  # 延迟导入：未安装/离线时端点报错而不是启动失败
+
+    communicate = edge_tts.Communicate(text, voice)
+    buf = io.BytesIO()
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            buf.write(chunk["data"])
+    data = buf.getvalue()
+    if not data:
+        raise RuntimeError("TTS 服务未返回音频")
+    return data
+
+
+@app.get("/api/tts")
+async def tts(text: str, voice: Optional[str] = None):
+    """文本转语音（MP3）。前端 fetch 失败时自动降级浏览器本地 TTS。"""
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text 不能为空")
+    text = text[:_TTS_TEXT_LIMIT]
+    v = (voice or _TTS_DEFAULT_VOICE).strip() or _TTS_DEFAULT_VOICE
+
+    key = f"{v}:{text}"
+    data = _tts_cache.get(key)
+    if data is None:
+        try:
+            data = await _tts_synth(text, v)
+        except Exception as e:  # noqa: BLE001 网络/服务异常统一 502，由前端降级
+            raise HTTPException(status_code=502, detail=f"语音合成失败：{e}") from e
+        if len(_tts_cache) >= _TTS_CACHE_MAX:
+            _tts_cache.pop(next(iter(_tts_cache)))  # FIFO 淘汰
+        _tts_cache[key] = data
+    return Response(content=data, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
 
 
 # ---------- LLM 运行时配置 ----------

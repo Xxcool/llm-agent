@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ChatMessage, MessageFeedback } from '../types'
 import { saveMessageFeedback } from '../api'
 import { IconAlert, IconCheck, IconCopy, IconRefresh, IconSpeaker, IconThumbDown, IconThumbUp, IconX } from './icons'
@@ -62,21 +62,71 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
     window.setTimeout(() => setCopied(false), 1500)
   }
 
-  const toggleSpeak = () => {
-    if (speaking) {
-      window.speechSynthesis.cancel()
-      setSpeaking(false)
-      return
-    }
-    const text = toSpeakableText(message.content)
-    if (!text) return
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  // 朗读会话序号：每次停止/重开递增，异步回调据此判断是否已被用户停止
+  const speakSeqRef = useRef(0)
+
+  // 组件卸载时停止朗读，避免声音残留
+  useEffect(() => () => {
+    window.speechSynthesis?.cancel()
+    audioRef.current?.pause()
+  }, [])
+
+  const stopSpeak = () => {
+    speakSeqRef.current++
+    audioRef.current?.pause()
+    audioRef.current = null
+    window.speechSynthesis?.cancel()
+    setSpeaking(false)
+  }
+
+  /** 降级：浏览器本地语音。优先挑系统里最自然的中文人声 */
+  const speakWithLocalTTS = (text: string) => {
+    const synth = window.speechSynthesis
     const utter = new SpeechSynthesisUtterance(text)
     utter.lang = 'zh-CN'
+    const zhVoices = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith('zh'))
+    const better =
+      zhVoices.find((v) => /premium|enhanced/i.test(v.name)) ??
+      zhVoices.find((v) => /xiaoxiao|yunxi|yunyang|xiaoyi|tingting|ting[- ]?ting|meijia|sinji|sin-ji/i.test(v.name)) ??
+      zhVoices[0]
+    if (better) utter.voice = better
+    utter.rate = 1.05
     utter.onend = () => setSpeaking(false)
     utter.onerror = () => setSpeaking(false)
-    window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(utter)
+    synth.cancel()
+    synth.speak(utter)
+  }
+
+  const toggleSpeak = async () => {
+    if (speaking) {
+      stopSpeak()
+      return
+    }
+    const text = toSpeakableText(message.content).slice(0, 3000)
+    if (!text) return
+    const seq = ++speakSeqRef.current
     setSpeaking(true)
+    try {
+      // 优先走后端 Edge 神经语音（自然拟人），失败降级浏览器本地 TTS
+      const resp = await fetch(`/api/tts?text=${encodeURIComponent(text)}`)
+      if (seq !== speakSeqRef.current) return // 期间被停止
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const blob = await resp.blob()
+      const audio = new Audio(URL.createObjectURL(blob))
+      audioRef.current = audio
+      const cleanup = () => {
+        if (audioRef.current === audio) audioRef.current = null
+        URL.revokeObjectURL(audio.src)
+        setSpeaking(false)
+      }
+      audio.onended = cleanup
+      audio.onerror = cleanup
+      await audio.play()
+    } catch {
+      if (seq !== speakSeqRef.current) return // 期间被停止
+      speakWithLocalTTS(text)
+    }
   }
 
   const thumbUp = async () => {
@@ -135,11 +185,17 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
                 </button>
               )}
               <button
-                className={`msg-act ${speaking ? 'active' : ''}`}
+                className={`msg-act ${speaking ? 'active speaking-wave' : ''}`}
                 onClick={toggleSpeak}
                 title={speaking ? '停止朗读' : '朗读回复'}
               >
-                <IconSpeaker size={14} />
+                {speaking ? (
+                  <span className="wave-bars" aria-hidden>
+                    <i /><i /><i /><i />
+                  </span>
+                ) : (
+                  <IconSpeaker size={14} />
+                )}
               </button>
               <button
                 className={`msg-act ${feedback?.type === 'up' ? 'active' : ''}`}
