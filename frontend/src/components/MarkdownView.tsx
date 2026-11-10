@@ -1,8 +1,69 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
+import rehypeKatex from 'rehype-katex'
+import rehypeRaw from 'rehype-raw'
+import 'katex/dist/katex.min.css'
 import { useEffect, useId, useRef, useState, type ReactElement } from 'react'
-import { IconCheck, IconCopy, IconDownload } from './icons'
+import { IconCheck, IconCopy, IconDownload, IconFile } from './icons'
+
+/** 按扩展名分流的媒体/文件类型 */
+const AUDIO_EXT = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'webm']
+const VIDEO_EXT = ['mp4', 'webm', 'ogv', 'mov', 'm4v']
+const FILE_EXT = [
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'txt', 'md',
+  'zip', 'rar', '7z', 'tar', 'gz', 'json', 'xml', 'yaml', 'yml', 'log', 'sql',
+]
+
+function extOf(url: string): string {
+  const clean = url.split(/[?#]/)[0]
+  const name = clean.split('/').pop() ?? ''
+  const parts = name.split('.')
+  return parts.length > 1 ? parts.pop()!.toLowerCase() : ''
+}
+
+function fileNameOf(url: string): string {
+  const clean = url.split(/[?#]/)[0]
+  return decodeURIComponent(clean.split('/').pop() || url)
+}
+
+/** 音频 / 视频播放器（统一外观，浏览器原生控件） */
+function MediaPlayer({ kind, src }: { kind: 'audio' | 'video'; src: string }) {
+  if (kind === 'audio') {
+    return (
+      <div className="md-audio">
+        <audio controls preload="metadata" src={src} />
+      </div>
+    )
+  }
+  return (
+    <div className="md-video">
+      <video controls preload="metadata" playsInline src={src} />
+    </div>
+  )
+}
+
+/** 文件卡片：图标 + 文件名 + 类型徽章 + 打开/下载 */
+function FileCard({ href }: { href: string }) {
+  const name = fileNameOf(href)
+  const ext = extOf(href)
+  return (
+    <div className="file-card">
+      <span className="file-card-icon"><IconFile size={18} /></span>
+      <div className="file-card-meta">
+        <span className="file-card-name" title={name}>{name}</span>
+        <span className="file-card-ext">{ext ? ext.toUpperCase() : 'FILE'}</span>
+      </div>
+      <div className="file-card-actions">
+        <a className="file-card-btn" href={href} target="_blank" rel="noreferrer">打开</a>
+        <a className="file-card-btn primary" href={href} download>
+          <IconDownload size={12} /> 下载
+        </a>
+      </div>
+    </div>
+  )
+}
 
 /** 语言 → 下载文件扩展名 */
 const EXT_MAP: Record<string, string> = {
@@ -194,13 +255,13 @@ function extractCode(children: React.ReactNode): {
   }
 }
 
-/** 升级版 Markdown 渲染：代码块（复制/下载）+ 语法高亮 + mermaid 流程图 + 表格复制 + 图片下载 */
+/** 升级版 Markdown 渲染：代码/表格/图片/流程图/LaTeX/音视频/文件卡片 */
 export function MarkdownView({ content }: { content: string }) {
   return (
     <div className="bubble-md">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight]}
         components={{
           pre: ({ children }) => {
             const info = extractCode(children)
@@ -216,6 +277,20 @@ export function MarkdownView({ content }: { content: string }) {
           img: ({ src, alt }) => (
             <MdImage src={typeof src === 'string' ? src : undefined} alt={alt ?? undefined} />
           ),
+          // 链接按扩展名分流：音频/视频 → 播放器，文档 → 文件卡片，其余普通链接
+          a: ({ href, children }) => {
+            const url = typeof href === 'string' ? href : ''
+            const ext = extOf(url)
+            if (AUDIO_EXT.includes(ext)) return <MediaPlayer kind="audio" src={url} />
+            if (VIDEO_EXT.includes(ext)) return <MediaPlayer kind="video" src={url} />
+            if (FILE_EXT.includes(ext)) return <FileCard href={url} />
+            return (
+              <a href={url} target="_blank" rel="noreferrer">{children}</a>
+            )
+          },
+          // 支持直接写 <audio> / <video> 标签（rehype-raw 解析后统一换样式）
+          audio: ({ src }) => <MediaPlayer kind="audio" src={typeof src === 'string' ? src : ''} />,
+          video: ({ src }) => <MediaPlayer kind="video" src={typeof src === 'string' ? src : ''} />,
         }}
       >
         {content}

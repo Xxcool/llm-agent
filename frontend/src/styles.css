@@ -673,7 +673,51 @@ body {
 .md-img-wrap:hover .md-img-dl { opacity: 1; }
 .md-img-dl:hover { color: var(--accent); }
 /* 助手消息操作栏（复制/重新生成/朗读/点赞/点踩） */
-.msg-actions {
+/* LaTeX 公式（KaTeX） */
+.bubble-md .katex { font-size: 1.04em; }
+.bubble-md .katex-display {
+  margin: 12px 0; padding: 10px 4px;
+  overflow-x: auto; overflow-y: hidden;
+}
+/* 音频 / 视频播放器 */
+.md-audio { margin: 12px 0; }
+.md-audio audio {
+  width: 100%; max-width: 460px; height: 38px;
+  border-radius: 10px; outline: none;
+}
+.md-video { margin: 12px 0; }
+.md-video video {
+  width: 100%; max-width: 560px; border-radius: 12px;
+  background: #0b0d12; border: 1px solid #eef0f4;
+}
+/* 文件卡片 */
+.file-card {
+  display: flex; align-items: center; gap: 10px;
+  margin: 10px 0; padding: 10px 12px;
+  border: 1px solid #e8eaf0; border-radius: 12px;
+  background: #fafbfd; max-width: 460px;
+}
+.file-card-icon {
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+}
+.file-card-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.file-card-name {
+  font-size: 13.5px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.file-card-ext { font-size: 11px; color: #9aa3b5; letter-spacing: 0.4px; }
+.file-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.file-card-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 10px; border-radius: 8px;
+  border: 1px solid #e2e6ee; background: #fff;
+  font-size: 12px; color: #4b5568; text-decoration: none;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.file-card-btn:hover { border-color: var(--accent); color: var(--accent); }
+.file-card-btn.primary { background: var(--accent-soft); border-color: #dbe4ff; color: #3b5bfd; }.msg-actions {
   display: flex; align-items: center; gap: 2px;
   margin-top: 6px; padding-top: 4px;
 }
