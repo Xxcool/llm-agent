@@ -132,20 +132,45 @@ export function ChatPage({
 
   // 切换会话/加载历史后瞬时定位到底部（不播滚动动画）；后续新消息才平滑滚动
   const jumpOnLoadRef = useRef(true)
+  const chatRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     // 会话切换：下次 messages 就绪时直接跳底
     jumpOnLoadRef.current = true
   }, [sessionId])
 
+  // 滚动时显示滚动条，停止 1 秒后隐藏（配合 .chat.scrolling 样式）
+  useEffect(() => {
+    const c = chatRef.current
+    if (!c) return
+    let timer: number | undefined
+    const onScroll = () => {
+      c.classList.add('scrolling')
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => c.classList.remove('scrolling'), 1000)
+    }
+    c.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      c.removeEventListener('scroll', onScroll)
+      window.clearTimeout(timer)
+    }
+  }, [])
+
   useEffect(() => {
     if (messages.length === 0) return
     if (jumpOnLoadRef.current) {
       jumpOnLoadRef.current = false
-      // 瞬时定位，无滚动动画；稍后再校正一次（图片/代码高亮异步撑高内容）
-      const jump = () => bottomRef.current?.scrollIntoView({ block: 'end' })
-      jump()
-      window.setTimeout(jump, 80)
+      // 瞬时贴底（scrollTo instant，不受任何样式影响）；图片/代码高亮/公式
+      // 会异步撑高内容，持续校正直到距底 ≤2px，保证「直接到最底部」
+      let tries = 0
+      const settle = () => {
+        const c = chatRef.current
+        if (!c) return
+        const dist = c.scrollHeight - c.scrollTop - c.clientHeight
+        if (dist > 2) c.scrollTo({ top: c.scrollHeight, behavior: 'instant' })
+        if (++tries < 12) window.setTimeout(settle, 120)
+      }
+      settle()
     } else {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
@@ -275,7 +300,7 @@ export function ChatPage({
       <div className="chat-header">
         <span className="chat-header-title" title={title}>{title || '新会话'}</span>
       </div>
-      <main className="chat">
+      <main className="chat" ref={chatRef}>
         {messages.length === 0 && !thinking && (
           <div className="chat-empty">
             <span className="logo"><IconBolt size={24} /></span>
