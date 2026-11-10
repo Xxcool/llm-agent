@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { getSession, getSessionMessages, streamChat } from '../api'
+import { createSession, getSession, getSessionMessages, streamChat } from '../api'
 import type { ChatMessage, ToolStep } from '../types'
 import { MessageBubble } from '../components/MessageBubble'
 import { Composer } from '../components/Composer'
 import { ToolTimeline } from '../components/ToolTimeline'
+import { IconBolt } from '../components/icons'
 
 let nextId = 1
 
@@ -13,9 +14,13 @@ const TYPE_CHARS = 3
 export function ChatPage({
   sessionId,
   refreshSessions,
+  onSessionCreated,
 }: {
-  sessionId: string
+  /** null = 草稿新对话（不落库），首条消息发送时才创建会话 */
+  sessionId: string | null
   refreshSessions: () => void
+  /** 草稿页创建会话成功后回调（用于侧栏高亮，不影响路由与渲染） */
+  onSessionCreated?: (id: string) => void
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [title, setTitle] = useState('')
@@ -25,6 +30,9 @@ export function ChatPage({
   const [webOn, setWebOn] = useState(true)
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  // 草稿模式创建会话后记录在这里（不触发重渲染，避免流式过程被打断）
+  const activeSessionRef = useRef<string | null>(sessionId)
 
   const typeQueueRef = useRef('')
   const typeTargetRef = useRef<number | null>(null)
@@ -59,7 +67,9 @@ export function ChatPage({
 
   // 加载会话历史与标题；若携带首条消息（首页跳转而来）自动发送
   const loadMessages = () => {
-    return getSessionMessages(sessionId)
+    const sid = activeSessionRef.current
+    if (!sid) return Promise.resolve()
+    return getSessionMessages(sid)
       .then((rows) => {
         setMessages(rows.map((r) => ({ ...r, id: nextId++, dbId: r.id })))
       })
@@ -70,41 +80,44 @@ export function ChatPage({
 
   useEffect(() => {
     let cancelled = false
+    activeSessionRef.current = sessionId
     setMessages([])
     setTitle('')
 
     // 首页提问：?ask= 参数（新页签）或 history.state.pending（同页兜底）
     // 注意：先只读取不清理——StrictMode 下 effect 会执行两次，提前清理会让第二次拿不到参数
     const params = new URLSearchParams(window.location.search)
-    const ask = params.get('ask')
+    const ask = sessionId ? params.get('ask') : null
     const st = window.history.state as { pending?: string } | null
     const pending = st?.pending ?? null
 
-    // 先加载历史，加载完再自动发问，避免重载把流式消息冲掉
-    getSessionMessages(sessionId)
-      .then((rows) => {
-        if (!cancelled) setMessages(rows.map((r) => ({ ...r, id: nextId++, dbId: r.id })))
-      })
-      .catch(() => {
-        if (!cancelled) setMessages([])
-      })
-      .finally(() => {
-        const text = ask || pending
-        if (!cancelled && text) {
-          window.setTimeout(() => {
-            // 发送时才清理 URL/状态，避免 StrictMode 双执行吞掉参数
-            if (ask) window.history.replaceState({}, '', `/c/${sessionId}`)
-            if (pending) window.history.replaceState({ ...window.history.state, pending: null }, '')
-            sendRef.current(text)
-          }, 100)
-        }
-      })
+    if (sessionId) {
+      // 先加载历史，加载完再自动发问，避免重载把流式消息冲掉
+      getSessionMessages(sessionId)
+        .then((rows) => {
+          if (!cancelled) setMessages(rows.map((r) => ({ ...r, id: nextId++, dbId: r.id })))
+        })
+        .catch(() => {
+          if (!cancelled) setMessages([])
+        })
+        .finally(() => {
+          const text = ask || pending
+          if (!cancelled && text) {
+            window.setTimeout(() => {
+              // 发送时才清理 URL/状态，避免 StrictMode 双执行吞掉参数
+              if (ask) window.history.replaceState({}, '', `/c/${sessionId}`)
+              if (pending) window.history.replaceState({ ...window.history.state, pending: null }, '')
+              sendRef.current(text)
+            }, 100)
+          }
+        })
 
-    getSession(sessionId)
-      .then((s) => {
-        if (!cancelled) setTitle(s.title)
-      })
-      .catch(() => undefined)
+      getSession(sessionId)
+        .then((s) => {
+          if (!cancelled) setTitle(s.title)
+        })
+        .catch(() => undefined)
+    }
     return () => {
       cancelled = true
     }
@@ -112,7 +125,9 @@ export function ChatPage({
   }, [sessionId])
 
   const refreshTitle = () => {
-    getSession(sessionId).then((s) => setTitle(s.title)).catch(() => undefined)
+    const sid = activeSessionRef.current
+    if (!sid) return
+    getSession(sid).then((s) => setTitle(s.title)).catch(() => undefined)
   }
 
   useEffect(() => {
@@ -143,7 +158,7 @@ export function ChatPage({
 
     streamChat(
       text,
-      sessionId,
+      activeSessionRef.current,
       { force_retrieval: knowledgeOn, allow_fetch: webOn },
       (event) => {
         switch (event.type) {
@@ -196,7 +211,25 @@ export function ChatPage({
   const send = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || thinkingRef.current) return
-    runStream(trimmed, true)
+    if (activeSessionRef.current) {
+      runStream(trimmed, true)
+      return
+    }
+    // 草稿新对话：首条消息发送时才创建会话（空会话不落库）
+    createSession()
+      .then((s) => {
+        activeSessionRef.current = s.id
+        // 静默更新地址栏（replaceState 不触发重渲染，流式过程不受影响）
+        window.history.replaceState(null, '', `/c/${s.id}`)
+        onSessionCreated?.(s.id)
+        runStream(trimmed, true)
+      })
+      .catch(() => {
+        setMessages((m) => [
+          ...m,
+          { id: nextId++, role: 'assistant', content: '', steps: [], error: '创建会话失败，请重试' },
+        ])
+      })
   }
 
   /** 重新生成：删除该助手消息及之后内容，用其前最近的用户问题重发 */
@@ -226,6 +259,13 @@ export function ChatPage({
         <span className="chat-header-title" title={title}>{title || '新会话'}</span>
       </div>
       <main className="chat">
+        {messages.length === 0 && !thinking && (
+          <div className="chat-empty">
+            <span className="logo"><IconBolt size={24} /></span>
+            <p>有什么可以帮你的？</p>
+            <span className="chat-empty-sub">基于企业知识库检索增强，支持流式输出与工具调用可视化</span>
+          </div>
+        )}
         {(() => {
           const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant')?.id
           return messages.map((msg) => (

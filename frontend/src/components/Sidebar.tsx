@@ -160,10 +160,11 @@ export function Sidebar({
   isDemo,
   healthState,
   healthError,
+  onActiveDeleted,
 }: {
   activeId: string | null
   onSelect: (id: string) => void
-  /** 开启新对话：不落库，回首页入口，首条消息发送时才创建会话 */
+  /** 开启新对话：进入草稿对话页（不落库），首条消息发送时才创建会话 */
   onNew: () => void
   refreshSignal: number
   onCollapse: () => void
@@ -172,6 +173,8 @@ export function Sidebar({
   isDemo: boolean
   healthState?: string
   healthError?: string | null
+  /** 当前打开的会话被删除（单个或批量）后回调——用于切换到新对话 */
+  onActiveDeleted: () => void
 }) {
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [showSearch, setShowSearch] = useState(false)
@@ -205,6 +208,8 @@ export function Sidebar({
   const handleDelete = async (id: string) => {
     await deleteSession(id).catch(() => undefined)
     refresh()
+    // 删除的是当前打开的会话 → 切换到新对话（草稿页），而不是留在已删除页面
+    if (id === activeId) onActiveDeleted()
   }
 
   const handleRename = async (id: string) => {
@@ -252,9 +257,11 @@ export function Sidebar({
   }
 
   const batchDelete = async () => {
+    const deletedActive = activeId !== null && selected.has(activeId)
     await Promise.all([...selected].map((id) => deleteSession(id).catch(() => undefined)))
     exitSelecting()
     refresh()
+    if (deletedActive) onActiveDeleted()
   }
 
   return (
