@@ -135,6 +135,8 @@ export interface Task {
   files: TaskFile[] | null
   /** 落盘后的确定性校验结果 */
   checks: TaskCheck[] | null
+  /** 已归档到知识库时的相对路径（P4/M5） */
+  archive_path?: string | null
   created_at?: string
   updated_at?: string
 }

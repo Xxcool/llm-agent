@@ -8,6 +8,7 @@ P3 行动层：
 import difflib
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -245,3 +246,50 @@ def apply_status(task: Dict[str, Any], status: str, artifact: str | None = None)
     if artifact is not None:
         out["artifact"] = artifact
     return out
+
+
+def archive_relpath(task: Dict[str, Any], now: datetime | None = None) -> str:
+    """知识库归档相对路径：沉淀/<年月>/<标题 slug>-<任务 id>.md。"""
+    now = now or datetime.now()
+    slug = re.sub(r"[^\w\u4e00-\u9fff-]+", "-", task.get("title") or "").strip("-")[:40]
+    return f"沉淀/{now:%Y-%m}/{slug or 'task'}-{task['id']}.md"
+
+
+def archive_markdown(task: Dict[str, Any], plan: Dict[str, Any] | None = None,
+                     now: datetime | None = None) -> str:
+    """把任务交付物整理成可回写知识库的 Markdown，保留方案→任务追溯链。"""
+    now = now or datetime.now()
+    plan = plan or {}
+    lines = [
+        f"# {task.get('title') or '任务交付归档'}",
+        "",
+        f"> 方案：{plan.get('title') or '未关联方案'}",
+        f"> 任务：#{task['id']} · 类型：{task.get('kind') or 'doc'}",
+        f"> 归档时间：{now:%Y-%m-%d %H:%M}",
+        "",
+    ]
+    if task.get("artifact"):
+        lines += ["## 交付说明", "", task["artifact"].strip(), ""]
+    files = task.get("files") or []
+    if files:
+        lines += ["## 交付文件", ""]
+        lines += [f"- `{f.get('path', '')}`" for f in files if f.get("path")]
+        lines.append("")
+    checks = task.get("checks") or []
+    if checks:
+        lines += ["## 校验结果", ""]
+        lines += [
+            f"- `{c.get('path', '')}`：{'通过' if c.get('ok') else '未通过'} — {c.get('detail', '')}"
+            for c in checks
+        ]
+        lines.append("")
+    lines += [
+        "## 追溯",
+        "",
+        f"- session_id：`{task.get('session_id', '')}`",
+        f"- message_id：`{task.get('message_id', '')}`",
+        f"- plan_id：`{task.get('plan_id', '')}`",
+        f"- task_id：`{task.get('id', '')}`",
+        "",
+    ]
+    return "\n".join(lines)

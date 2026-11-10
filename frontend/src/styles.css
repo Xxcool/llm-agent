@@ -1452,3 +1452,10 @@ body {
 /* 首页快捷入口异常态 */
 .quick-chip-error { color: #e5484d; border-color: #f5c6c8; background: #fdecec; }
 .quick-chip-error:hover { border-color: #e5484d; }
+
+
+.task-archived {
+  color: #2f8f5b;
+  font-size: 12px;
+  white-space: nowrap;
+}

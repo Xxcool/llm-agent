@@ -636,6 +636,35 @@ def apply_task_files(tid: int):
     return {"status": "ok", "written": written, "checks": checks, "task": updated}
 
 
+@app.post("/api/tasks/{tid}/archive")
+def archive_task(tid: int):
+    """把已完成任务的交付物归档回知识库，形成可检索的组织记忆（P4/M5）。"""
+    from .tasks import archive_markdown, archive_relpath
+
+    store = _ensure_store()
+    task = store.get_task(tid)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task.get("status") != "done":
+        raise HTTPException(status_code=400, detail="只有已完成任务可以归档")
+
+    existing = task.get("archive_path")
+    if existing and (KNOWLEDGE_ROOT / existing).is_file():
+        return {"status": "ok", "cached": True, "source": existing, "task": task}
+
+    msg = store.get_message(task["message_id"])
+    plan = None
+    if msg:
+        plan = next((p for p in (msg.get("plans") or []) if p.get("id") == task["plan_id"]), None)
+    rel = archive_relpath(task)
+    target = KNOWLEDGE_ROOT / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(archive_markdown(task, plan), encoding="utf-8")
+    _ensure_state().ingest_dir(KNOWLEDGE_ROOT)
+    updated = store.update_task(tid, "done", archive_path=rel)
+    return {"status": "ok", "cached": False, "source": rel, "task": updated}
+
+
 @app.post("/api/tasks/{tid}/discard")
 def discard_task_files(tid: int):
     """丢弃待审批的代码交付（不落盘）。"""

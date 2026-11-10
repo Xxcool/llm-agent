@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Task } from '../types'
-import { applyTask, breakdownTasks, discardTask, runTask } from '../api'
+import { applyTask, archiveTask, breakdownTasks, discardTask, runTask } from '../api'
 import { MarkdownView } from './MarkdownView'
 import { IconCheck, IconPlan, IconX } from './icons'
 
@@ -27,6 +27,7 @@ export function TaskBoard({
   const [breaking, setBreaking] = useState(false)
   const [runningId, setRunningId] = useState<number | null>(null)
   const [applyingId, setApplyingId] = useState<number | null>(null)
+  const [archivingId, setArchivingId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [openId, setOpenId] = useState<number | null>(null)
 
@@ -78,6 +79,21 @@ export function TaskBoard({
       setError((e as Error).message)
     } finally {
       setApplyingId(null)
+    }
+  }
+
+  /** 已完成任务：把交付物归档回知识库（P4/M5） */
+  const archive = async (task: Task) => {
+    if (archivingId !== null) return
+    setArchivingId(task.id)
+    setError('')
+    try {
+      const r = await archiveTask(task.id)
+      onTasks(tasks.map((t) => (t.id === task.id ? r.task : t)))
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setArchivingId(null)
     }
   }
 
@@ -144,13 +160,28 @@ export function TaskBoard({
                       </button>
                     </span>
                   ) : (
-                    <button
-                      className="btn ghost small task-run"
-                      onClick={() => run(t)}
-                      disabled={runningId !== null || t.status === 'running'}
-                    >
-                      {t.status === 'done' ? '重新执行' : t.status === 'running' ? '执行中…' : '执行'}
-                    </button>
+                    <>
+                      {t.status === 'done' && (
+                        t.archive_path ? (
+                          <span className="task-archived" title={t.archive_path}>已归档</span>
+                        ) : (
+                          <button
+                            className="btn ghost small"
+                            onClick={() => archive(t)}
+                            disabled={archivingId !== null}
+                          >
+                            {archivingId === t.id ? '归档中…' : '归档到知识库'}
+                          </button>
+                        )
+                      )}
+                      <button
+                        className="btn ghost small task-run"
+                        onClick={() => run(t)}
+                        disabled={runningId !== null || t.status === 'running'}
+                      >
+                        {t.status === 'done' ? '重新执行' : t.status === 'running' ? '执行中…' : '执行'}
+                      </button>
+                    </>
                   )}
                 </div>
                 {t.detail && <p className="task-detail">{t.detail}</p>}

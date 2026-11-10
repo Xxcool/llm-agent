@@ -49,6 +49,7 @@ class ChatStore:
               artifact TEXT,
               files TEXT,
               checks TEXT,
+              archive_path TEXT,
               created_at TEXT,
               updated_at TEXT
             );
@@ -79,6 +80,7 @@ class ChatStore:
             ("kind", "ALTER TABLE tasks ADD COLUMN kind TEXT DEFAULT 'doc'"),
             ("files", "ALTER TABLE tasks ADD COLUMN files TEXT"),
             ("checks", "ALTER TABLE tasks ADD COLUMN checks TEXT"),
+            ("archive_path", "ALTER TABLE tasks ADD COLUMN archive_path TEXT"),
         ):
             if col not in tcols:
                 with self._lock:
@@ -272,7 +274,7 @@ class ChatStore:
 
     _TASK_COLS = (
         "id, session_id, message_id, plan_id, title, detail, output, kind, status, "
-        "artifact, files, checks, created_at, updated_at"
+        "artifact, files, checks, archive_path, created_at, updated_at"
     )
 
     @staticmethod
@@ -292,8 +294,9 @@ class ChatStore:
             "artifact": r[9],
             "files": json.loads(r[10]) if r[10] else None,
             "checks": json.loads(r[11]) if r[11] else None,
-            "created_at": r[12],
-            "updated_at": r[13],
+            "archive_path": r[12],
+            "created_at": r[13],
+            "updated_at": r[14],
         }
 
     def add_tasks(self, sid: str, message_id: int, tasks: List[dict]) -> List[dict]:
@@ -344,6 +347,7 @@ class ChatStore:
         artifact: Optional[str] = None,
         files: Optional[list] = None,
         checks: Optional[list] = None,
+        archive_path: Optional[str] = None,
     ) -> Optional[dict]:
         now = _now()
         sets, args = ["status=?", "updated_at=?"], [status, now]
@@ -360,6 +364,9 @@ class ChatStore:
 
             sets.append("checks=?")
             args.append(json.dumps(checks, ensure_ascii=False))
+        if archive_path is not None:
+            sets.append("archive_path=?")
+            args.append(archive_path)
         args.append(tid)
         with self._lock:
             cur = self.conn.execute(f"UPDATE tasks SET {', '.join(sets)} WHERE id=?", args)

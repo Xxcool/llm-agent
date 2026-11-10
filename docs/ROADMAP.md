@@ -25,7 +25,7 @@ flowchart LR
 | P1 | 感知 · 检索 | 让智能体「查得准、说得有依据」 | ✅ 已完成 |
 | P2 | 规划 · 方案 | 让输出从「一段话」变成「可确认的方案」 | ✅ M1 方案卡片 + 确认闸门；M2 多方案对比（已完成） |
 | P3 | 行动 · 执行 | 让方案变成「跑得动的任务」 | ✅ M3 拆解/看板/文档交付；M4 代码交付 + diff 审批（已完成；命令执行默认关闭） |
-| P4 | 记忆 · 沉淀 | 让每次交付都成为下次的资产 | 📋 规划中 |
+| P4 | 记忆 · 沉淀 | 让每次交付都成为下次的资产 | 🚧 M5 产物归档（首增量已落地） |
 
 ---
 
@@ -40,7 +40,7 @@ flowchart LR
 | 工具调用 | `search_knowledge` / `fetch_url`，最多 6 轮工具循环，思考模型 `reasoning_content` 兼容 |
 | 过程可观测 | SSE 事件流（tool_call / tool_result / token / done / error）+ 前端工具时间线 |
 | 来源追溯 | 回答标注来源文件，前端可展开查看检索到的原文片段 |
-| 质量保障 | 67 个 pytest 用例（含后续阶段）+ 真实链路端到端验证脚本 |
+| 质量保障 | 67 个 pytest 用例（含后续阶段）+ 18 个前端用例 + 真实链路端到端验证脚本 |
 
 **验收**：可对任意入库文档提问，回答包含来源标注，无关问题如实拒答。已验证通过。
 
@@ -150,6 +150,13 @@ flowchart LR
 2. 下一次相似诉求能检索到上次的方案与结论
 3. 归档案可追溯到「哪个方案 → 哪些任务 → 谁确认的」
 
+**已落地（M5 首增量）**：
+- `POST /api/tasks/{id}/archive`：已完成任务归档到 `knowledge/沉淀/<年月>/<标题>-<任务 id>.md`
+- 归档内容保留方案标题、任务类型、交付说明/文件/校验结果与 session/message/plan/task id 追溯链
+- 幂等：重复归档返回已有路径；归档后通过 `ingest_dir` 进入知识库，可直接检索
+- 前端任务看板对已完成任务提供「归档到知识库」按钮，归档后显示「已归档」
+- 测试：`test_tasks.py` 覆盖归档落盘、检索可见、幂等与未完成拦截；`TaskBoard.test.tsx` 覆盖归档交互
+
 ---
 
 ## 三、测试覆盖现状
@@ -157,7 +164,7 @@ flowchart LR
 | 层 | 用例数 | 命令 | 覆盖范围 |
 |---|---|---|---|
 | 后端（pytest） | 67 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
-| 前端（vitest + Testing Library） | 17 | `cd frontend && npm test` | api 请求契约、方案卡片与多方案对比表、任务看板（拆解/执行/diff 审批）、Composer 交互 |
+| 前端（vitest + Testing Library） | 18 | `cd frontend && npm test` | api 请求契约、方案卡片与多方案对比表、任务看板（拆解/执行/diff 审批）、Composer 交互 |
 | 真实链路（脚本） | 端到端 | `cd backend && .venv/bin/python scripts/verify_real.py` | 真实模型 + RAG 检索 + SSE + 持久化 |
 
 CI：`.github/workflows/ci.yml` 在每次 push / PR 自动执行后端 pytest、前端 vitest 与前端构建。

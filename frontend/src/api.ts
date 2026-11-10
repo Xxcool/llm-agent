@@ -359,6 +359,16 @@ export async function applyTask(taskId: number): Promise<{ task: Task; written: 
   return (await resp.json()) as { task: Task; written: string[]; checks: TaskCheck[] }
 }
 
+/** 把已完成任务归档回知识库（P4/M5） */
+export async function archiveTask(taskId: number): Promise<{ task: Task; source: string; cached: boolean }> {
+  const resp = await apiFetch(`/api/tasks/${taskId}/archive`, { method: 'POST' })
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
+    throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
+  }
+  return (await resp.json()) as { task: Task; source: string; cached: boolean }
+}
+
 /** 丢弃代码类交付（不落盘） */
 export async function discardTask(taskId: number): Promise<Task> {
   const resp = await apiFetch(`/api/tasks/${taskId}/discard`, { method: 'POST' })

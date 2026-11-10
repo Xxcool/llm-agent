@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Task } from '../types'
 import { TaskBoard } from './TaskBoard'
-import { applyTask, breakdownTasks, discardTask, runTask } from '../api'
+import { applyTask, archiveTask, breakdownTasks, discardTask, runTask } from '../api'
 import { makeTask } from '../test/fixtures'
 
 vi.mock('../api', () => ({
@@ -12,6 +12,7 @@ vi.mock('../api', () => ({
   runTask: vi.fn(),
   applyTask: vi.fn(),
   discardTask: vi.fn(),
+  archiveTask: vi.fn(),
 }))
 
 // MarkdownView 依赖较多（KaTeX / mermaid），测试中替换为轻量占位
@@ -38,6 +39,7 @@ function Harness({ initial, onTasksSpy }: { initial: Task[]; onTasksSpy?: (t: Ta
 const mockedBreakdown = vi.mocked(breakdownTasks)
 const mockedRun = vi.mocked(runTask)
 const mockedApply = vi.mocked(applyTask)
+const mockedArchive = vi.mocked(archiveTask)
 const mockedDiscard = vi.mocked(discardTask)
 
 describe('TaskBoard 任务看板', () => {
@@ -104,6 +106,22 @@ describe('TaskBoard 任务看板', () => {
     await waitFor(() =>
       expect(screen.getByText(/Python 语法校验通过/)).toBeInTheDocument(),
     )
+  })
+
+  it('已完成任务可归档回知识库', async () => {
+    const task = makeTask({ id: 6, status: 'done', artifact: '# 交付' })
+    mockedArchive.mockResolvedValueOnce({
+      task: { ...task, archive_path: '沉淀/2026-11/流程图-6.md' },
+      source: '沉淀/2026-11/流程图-6.md',
+      cached: false,
+    })
+    const onTasks = vi.fn()
+
+    render(<Harness initial={[task]} onTasksSpy={onTasks} />)
+    await userEvent.click(screen.getByRole('button', { name: /归档到知识库/ }))
+    expect(mockedArchive).toHaveBeenCalledWith(6)
+    await waitFor(() => expect(screen.getByText('已归档')).toBeInTheDocument())
+    expect(onTasks).toHaveBeenCalled()
   })
 
   it('丢弃待审批文件调用 discardTask', async () => {

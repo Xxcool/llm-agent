@@ -130,6 +130,21 @@ def test_breakdown_then_run_task(tmp_app):
     assert task["status"] == "done"
     assert "任务目标" in (task["artifact"] or "")
 
+    # P4/M5：已完成任务归档回知识库，可检索且幂等
+    r4 = client.post(f"/api/tasks/{tid}/archive")
+    assert r4.status_code == 200
+    archived = r4.json()
+    assert archived["cached"] is False
+    source = archived["source"]
+    assert source.startswith("沉淀/")
+    target = tmp_app.KNOWLEDGE_ROOT / source
+    assert target.is_file()
+    text = target.read_text(encoding="utf-8")
+    assert "差旅报销" in text and "trace" not in text.lower()
+    assert task["title"] in text
+    assert client.post(f"/api/tasks/{tid}/archive").json()["cached"] is True
+    assert source in [d["source"] for d in client.get("/api/knowledge").json()["docs"]]
+
     # 删除会话级联清理任务
     client.delete(f"/api/sessions/{sid}")
     assert client.get(f"/api/sessions/{sid}/tasks").json()["tasks"] == []
@@ -147,9 +162,10 @@ def test_code_task_diff_review_then_apply(tmp_app):
     tasks = client.post(f"/api/messages/{mid}/tasks", json={"plan_id": pid}).json()["tasks"]
     code_task = next(t for t in tasks if t["kind"] == "code")
 
-    # 未进入 review 前，apply / discard 都必须被状态守卫拒绝
+    # 未进入 review 前，apply / discard / archive 都必须被状态守卫拒绝
     assert client.post(f"/api/tasks/{code_task['id']}/apply").status_code == 400
     assert client.post(f"/api/tasks/{code_task['id']}/discard").status_code == 400
+    assert client.post(f"/api/tasks/{code_task['id']}/archive").status_code == 400
 
     # 执行 → 进入 review，带 diff，但文件尚未落盘
     r = client.post(f"/api/tasks/{code_task['id']}/run")
