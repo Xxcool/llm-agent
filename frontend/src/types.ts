@@ -53,4 +53,8 @@ export interface HealthInfo {
   status: string
   provider: string
   chunks: number
+  model?: string
+  /** 模型服务真实探测结果（openai provider 才探测） */
+  ok?: boolean
+  error?: string
 }

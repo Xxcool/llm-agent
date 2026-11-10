@@ -334,6 +334,12 @@ body {
 }
 .sb-status .dot { width: 7px; height: 7px; border-radius: 50%; background: #34c77b; }
 .sb-status .dot.mock { background: #f5a623; }
+.sb-status .dot.err { background: #e5484d; }
+.sb-status-error {
+  font-size: 11px; color: #e5484d;
+  padding: 0 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .sb-bottom-actions { display: flex; gap: 6px; }
 .sb-bottom-actions .icon-btn { flex: 1; justify-items: start; width: auto; padding: 7px 10px; border-radius: 10px; font-size: 12.5px; display: flex; align-items: center; gap: 7px; }
 .sb-top-actions { display: flex; align-items: center; gap: 2px; }

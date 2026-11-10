@@ -158,6 +158,8 @@ export function Sidebar({
   onOpenSettings,
   onOpenKnowledge,
   isDemo,
+  healthState,
+  healthError,
 }: {
   activeId: string | null
   onSelect: (id: string) => void
@@ -168,6 +170,8 @@ export function Sidebar({
   onOpenSettings: () => void
   onOpenKnowledge: () => void
   isDemo: boolean
+  healthState?: string
+  healthError?: string | null
 }) {
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [showSearch, setShowSearch] = useState(false)
@@ -378,9 +382,12 @@ export function Sidebar({
       ) : (
         <div className="sb-bottom">
           <span className="sb-status">
-            <span className={`dot ${isDemo ? 'mock' : ''}`} />
-            {isDemo ? '演示模式（未接入 Key）' : '模型服务已接入'}
+            <span className={`dot ${healthState === 'error' ? 'err' : isDemo ? 'mock' : ''}`} />
+            {healthState === 'error' ? '模型服务异常' : isDemo ? '演示模式（未接入 Key）' : '模型服务已接入'}
           </span>
+          {healthState === 'error' && healthError && (
+            <span className="sb-status-error" title={healthError}>{healthError}</span>
+          )}
           <div className="sb-bottom-actions">
             <button className="icon-btn" onClick={onOpenKnowledge}>
               <IconBook size={14} /> 知识库

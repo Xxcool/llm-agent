@@ -86,17 +86,42 @@ class ConfigIn(BaseModel):
     model: Optional[str] = None
 
 
+_health_cache: dict = {"ts": 0.0, "data": None}
+_HEALTH_TTL = 60.0  # 秒：模型探测有真实开销，结果缓存 1 分钟
+
+
 @app.get("/api/health")
 def health():
     _ensure_state()
+    import time
+
+    now = time.time()
+    if _health_cache["data"] and now - _health_cache["ts"] < _HEALTH_TTL:
+        return _health_cache["data"]
+
     chunks = _rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     rt = _load_runtime()
-    return {
+    data = {
         "status": "ok",
         "provider": _provider.name,
         "model": rt.get("model") or config.LLM_MODEL,
         "chunks": chunks,
     }
+    if _provider.name == "openai":
+        # 真实探测：只看「模型服务现在能不能用」，欠费/无效 Key 都会在这里暴露
+        try:
+            _provider.chat([{"role": "user", "content": "ping"}])
+            data["ok"] = True
+        except Exception as e:  # noqa: BLE001
+            from .agent import _provider_error_message
+
+            data["ok"] = False
+            data["error"] = _provider_error_message(e)
+    else:
+        data["ok"] = True
+    _health_cache["ts"] = now
+    _health_cache["data"] = data
+    return data
 
 
 # ---------- LLM 运行时配置 ----------
@@ -134,6 +159,7 @@ def set_config(body: ConfigIn):
     _save_runtime(rt)
     global _provider
     _provider = _make_provider()
+    _health_cache["ts"] = 0.0  # 配置变更后立即重新探测
     return {"status": "ok", "provider": _provider.name}
 
 

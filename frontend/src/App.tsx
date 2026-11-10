@@ -41,6 +41,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const isDemo = health?.provider === 'mock'
+  // 状态：未连接 / 演示模式 / 连接异常（真实探测失败）/ 已接入
+  const healthState = !health ? 'down' : isDemo ? 'demo' : health.ok === false ? 'error' : 'ok'
 
   // 首页提问：新页签打开会话页（首页保留），问题通过 URL 参数带走
   const askOnHome = useCallback(
@@ -83,6 +85,8 @@ export default function App() {
               onOpenSettings={() => setShowSettings(true)}
               onOpenKnowledge={() => setShowKnowledge(true)}
               isDemo={Boolean(isDemo)}
+              healthState={healthState}
+              healthError={health?.ok === false ? health.error : null}
             />
           )}
           {!sidebarOpen && (
