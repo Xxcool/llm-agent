@@ -1485,12 +1485,26 @@ body {
   display: flex;
   gap: 8px;
   margin: 8px 0;
+  align-items: stretch;
 }
 
+/* 与同弹窗的 .paste-box input 保持一致，避免露出浏览器默认边框/直角 */
 .knowledge-reuse input {
   flex: 1;
   min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--bg-card);
+  outline: none;
 }
+
+.knowledge-reuse input:focus { border-color: var(--accent); }
+.knowledge-reuse input::placeholder { color: #9aa3b5; }
+.knowledge-reuse .btn { flex-shrink: 0; }
 
 .reuse-list {
   display: flex;
