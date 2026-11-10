@@ -34,6 +34,11 @@ KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", ROOT / "knowledge"))
 DB_PATH = Path(os.getenv("RAG_DB_PATH", ROOT / "data" / "rag.sqlite3"))
 # 匿名工作区根目录：每个浏览器一个独立子目录（chat/rag/knowledge/workspace/config）
 CLIENTS_DIR = Path(os.getenv("CLIENTS_DIR", DB_PATH.parent / "clients"))
+# 部署形态开关：1=多租户（每浏览器独立工作区，默认）；0=单租户（演示/单实例部署，
+# 知识库与数据直接落在 KNOWLEDGE_DIR 同级，不做 Cookie 隔离）
+MULTI_TENANT = os.getenv("MULTI_TENANT", "1").strip().lower() not in ("0", "false", "no")
+# 前端产物目录：开发默认仓库内 frontend/dist；部署包设为 static（相对当前工作目录）
+STATIC_DIR = os.getenv("STATIC_DIR", str(ROOT.parent / "frontend" / "dist"))
 # 任务执行的工作区（测试/兼容用；生产按匿名工作区隔离）
 WORKSPACE_DIR = Path(os.getenv("WORKSPACE_DIR", ROOT / "data" / "workspace"))
 # 匿名 Cookie 签名密钥；为空时自动生成并持久化到 DB_PATH 同目录

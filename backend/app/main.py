@@ -75,10 +75,15 @@ _HEALTH_TTL = 60.0  # 秒：模型探测有真实开销，结果缓存 1 分钟
 
 
 def _current_client() -> str:
+    if not config.MULTI_TENANT:
+        return "default"  # 单租户：所有请求共用一个工作区
     return _CLIENT_CTX.get() or "anonymous"
 
 
 def _client_root(client_id: Optional[str] = None) -> Path:
+    if not config.MULTI_TENANT:
+        # 单租户：knowledge/ workspace/ *.sqlite3 直接落在 KNOWLEDGE_DIR 的父目录
+        return Path(config.KNOWLEDGE_DIR).parent
     return Path(config.CLIENTS_DIR) / (client_id or _current_client())
 
 
@@ -225,7 +230,12 @@ def _workspace_dir(session_id: str) -> Path:
 
 @app.middleware("http")
 async def anonymous_workspace(request, call_next):
-    """给每个浏览器分配签名 client_id，所有 API 数据按该工作区隔离。"""
+    """给每个浏览器分配签名 client_id，所有 API 数据按该工作区隔离。
+
+    MULTI_TENANT=0 时跳过分配，所有请求共用同一工作区（演示/单实例部署）。
+    """
+    if not config.MULTI_TENANT:
+        return await call_next(request)
     raw = request.cookies.get(config.CLIENT_COOKIE_NAME)
     client_id = _decode_client_cookie(raw)
     new_client = client_id is None
@@ -934,7 +944,7 @@ def chat(body: ChatIn):
 
 # ---------- 生产部署：托管前端构建产物（frontend/dist），单端口同时服务 API 与页面 ----------
 
-_FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+_FRONTEND_DIST = Path(config.STATIC_DIR).resolve()
 if _FRONTEND_DIST.is_dir():
     from fastapi.responses import FileResponse
 

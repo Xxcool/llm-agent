@@ -57,12 +57,25 @@ def test_agent_loop_with_tools(tmp_path, monkeypatch):
 
 
 def test_search_threshold_rejects_unrelated(tmp_path, monkeypatch):
-    """相似度低于阈值时如实返回「没有相关内容」，而不是硬凑不相关片段。"""
+    """语义模型可用时，相似度低于阈值如实返回「没有相关内容」，而不是硬凑不相关片段。"""
     monkeypatch.setattr(config, "SCORE_THRESHOLD", 0.99)  # 高阈值必然触发拒绝分支
     store, _ = make_store(tmp_path)
+    store.is_semantic = True  # 语义模型可用：严格阈值，不做字面兜底
     executor = ToolExecutor(store)
     result = executor.run("search_knowledge", {"query": "研发团队做过哪些项目"})
     assert result == "知识库中没有相关内容。"
+
+
+def test_search_keyword_fallback_when_not_semantic(tmp_path, monkeypatch):
+    """降级为 hash 向量时，向量分数天然偏低，靠字面 2-gram 覆盖率兜底召回，
+    否则离线/演示模式会永远返回「没有相关内容」。"""
+    monkeypatch.setattr(config, "SCORE_THRESHOLD", 0.99)  # 向量分数一定不达标
+    store, _ = make_store(tmp_path)
+    store.is_semantic = False  # 模拟 fastembed 不可用
+    executor = ToolExecutor(store)
+    result = executor.run("search_knowledge", {"query": "运维监控 Prometheus"})
+    assert result != "知识库中没有相关内容。"
+    assert "Prometheus" in result
 
 
 def test_tool_unknown(tmp_path):
