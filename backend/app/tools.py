@@ -119,6 +119,9 @@ class ToolExecutor:
             # 相似度阈值：最高分都达不到阈值说明知识库没覆盖该主题，
             # 宁可如实说没有也不要硬凑不相关内容污染回答
             hits = [h for h in hits if h[2] >= config.SCORE_THRESHOLD]
+            if not hits and not self.rag.is_semantic:
+                # 语义模型不可用（hash 降级向量）时分数天然偏低，字面兜底避免演示模式检索恒为空
+                hits = self.rag.search_keyword(args["query"])
             if not hits:
                 return "知识库中没有相关内容。"
             return "\n---\n".join(f"[{src}] {text}" for src, text, _ in hits)

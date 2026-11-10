@@ -194,7 +194,7 @@ class MockProvider(BaseProvider):
     def _demo_answer(question: str, result: str) -> str:
         header = "（演示模式：未接入真实大模型，以下为检索结果摘录）\n\n"
         if not result:
-            return header + "未获得检索结果，请重试或在「模型服务」中接入真实 Key。"
+            return header + "未获得检索结果，请重试，或先[接入真实模型服务](app://settings)。"
         # 工具/抓取失败
         if result.startswith(("抓取失败", "工具执行失败", "检索失败")):
             return header + f"本次工具调用出现问题：{result[:120]}"
@@ -205,17 +205,21 @@ class MockProvider(BaseProvider):
         # 网页抓取结果（无 [来源] 前缀的纯文本）
         if not result.startswith("["):
             return header + f"已抓取网页正文并完成解析，关键内容摘录：\n\n> {result[:150]}…"
-        # 知识库检索结果：逐条列出来源与摘要
+        # 知识库检索结果：每个片段独立成段，保留小节标题/表格结构，
+        # 摘录长度放宽到 200 字，避免表格被截在表头、不同问题看起来一模一样
         parts = [p for p in result.split("\n---\n") if p.strip()]
         topic = question[:30] or "该问题"
         lines = [header + f"针对「{topic}」，从知识库中检索到 {len(parts)} 个相关片段：", ""]
         for p in parts[:3]:
             src, _, text = p.partition("]")
             src = src.lstrip("[").strip() or "未知来源"
-            snippet = (text.strip() or p.strip())[:80] + ("…" if len(text.strip()) > 80 else "")
-            lines.append(f"- **{src}**：{snippet}")
-        lines.append("")
-        lines.append("接入真实模型服务后（右上角「模型服务」填入 API Key），将基于以上片段生成完整、结构化的回答。")
+            body = text.strip() or p.strip()
+            body = body[:200] + ("…" if len(body) > 200 else "")
+            lines.append(f"**{src}**")
+            lines.append("")
+            lines.append(body)
+            lines.append("")
+        lines.append("[接入真实模型服务](app://settings)后，将基于以上片段生成完整、结构化的回答。")
         return "\n".join(lines)
 
 

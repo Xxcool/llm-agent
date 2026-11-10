@@ -302,7 +302,7 @@ def health():
 # ---------- TTS 朗读（Edge 神经语音，比浏览器 SpeechSynthesis 自然得多） ----------
 
 _TTS_DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"  # 晓晓：自然亲切的女声
-_TTS_TEXT_LIMIT = 3000
+_TTS_TEXT_LIMIT = 8000
 _tts_cache: dict[str, bytes] = {}
 _TTS_CACHE_MAX = 50
 
