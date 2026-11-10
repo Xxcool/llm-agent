@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { fetchConfig, saveConfig } from '../api'
 import type { PlatformConfig } from '../api'
+import { IconX } from './icons'
 
 export function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [cfg, setCfg] = useState<PlatformConfig | null>(null)
@@ -30,7 +31,7 @@ export function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
       }
       if (apiKey.trim()) payload.api_key = apiKey.trim() // 留空 = 保留已存 Key
       const r = await saveConfig(payload)
-      setMessage(r.provider === 'mock' ? '⚠️ 未填写 Key，当前仍为演示模式' : `✅ 已接入 ${r.provider}`)
+      setMessage(r.provider === 'mock' ? '未填写 Key，当前仍为演示模式' : `已接入 ${r.provider}`)
       onSaved()
     } catch (e) {
       setMessage(`保存失败：${(e as Error).message}`)
@@ -44,7 +45,7 @@ export function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>接入模型服务</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose} aria-label="关闭"><IconX size={14} /></button>
         </div>
 
         <label className="field">

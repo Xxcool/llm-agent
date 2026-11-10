@@ -7,6 +7,15 @@ import { ToolTimeline } from './components/ToolTimeline'
 import { SettingsModal } from './components/SettingsModal'
 import { KnowledgePanel } from './components/KnowledgePanel'
 import { GridBackdrop } from './components/GridBackdrop'
+import {
+  IconBolt,
+  IconBook,
+  IconCheck,
+  IconDatabase,
+  IconSettings,
+  IconSparkle,
+  IconWrench,
+} from './components/icons'
 
 let nextId = 1
 
@@ -152,7 +161,7 @@ export default function App() {
       <header className="header">
         <div className={`nav-pill ${glass ? 'glass' : ''}`}>
           <div className="header-title">
-            <span className="logo">⚡</span>
+            <span className="logo"><IconBolt size={15} /></span>
             <h1>LLM Agent 智能对话平台</h1>
           </div>
           <div className="header-actions">
@@ -161,10 +170,10 @@ export default function App() {
               {health ? (isDemo ? '演示模式' : '已接入') : '未连接'}
             </span>
             <button className="icon-btn" title="知识库管理" onClick={() => setShowKnowledge(true)}>
-              📚
+              <IconBook size={15} />
             </button>
             <button className="icon-btn" title="接入模型服务" onClick={() => setShowSettings(true)}>
-              ⚙️
+              <IconSettings size={15} />
             </button>
           </div>
         </div>
@@ -223,26 +232,28 @@ export default function App() {
           </div>
           <div className="hero-quick rise" style={{ animationDelay: '0.24s' }}>
             <button className="quick-chip" onClick={() => setShowSettings(true)}>
-              {isDemo ? '⚙️ 接入模型服务' : '✅ 模型已接入'}
+              {isDemo ? <IconSettings size={14} /> : <IconCheck size={14} />}
+              {isDemo ? '接入模型服务' : '模型已接入'}
             </button>
             <button className="quick-chip" onClick={() => setShowKnowledge(true)}>
-              📚 管理知识库{health ? `（${health.chunks} 块）` : ''}
+              <IconBook size={14} />
+              管理知识库{health ? `（${health.chunks} 块）` : ''}
             </button>
           </div>
 
           <section className="hero-features">
             <div className="feature-card">
-              <div className="feature-icon">🔍</div>
+              <div className="feature-icon"><IconDatabase size={20} /></div>
               <h3>RAG 检索增强</h3>
               <p>文档自动分块向量化，回答前检索最相关的知识片段，并标注来源文件</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">🛠</div>
+              <div className="feature-icon"><IconWrench size={20} /></div>
               <h3>Function Calling</h3>
               <p>Agent 自主调用知识检索、简历查询、网页抓取三类工具，多轮闭环完成任务</p>
             </div>
             <div className="feature-card">
-              <div className="feature-icon">⚡</div>
+              <div className="feature-icon"><IconSparkle size={20} /></div>
               <h3>SSE 流式输出</h3>
               <p>Fetch Stream 逐字呈现回答，工具调用过程以时间线实时可视化</p>
             </div>

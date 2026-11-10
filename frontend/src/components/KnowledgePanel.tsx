@@ -8,6 +8,7 @@ import {
   uploadKnowledgeFile,
 } from '../api'
 import type { KnowledgeDoc } from '../api'
+import { IconFile, IconImport, IconLink, IconPencil, IconUpload, IconX } from './icons'
 
 type ImportMode = 'none' | 'paste' | 'url' | 'juejin'
 
@@ -91,7 +92,7 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>知识库管理</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose} aria-label="关闭"><IconX size={14} /></button>
         </div>
 
         <p className="panel-sub">
@@ -101,16 +102,16 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
 
         <div className="panel-actions">
           <button className="btn primary" onClick={() => fileRef.current?.click()} disabled={busy}>
-            📎 上传文件
+            <IconUpload size={14} /> 上传文件
           </button>
           <button className="btn ghost" onClick={() => setMode(mode === 'paste' ? 'none' : 'paste')}>
-            📝 粘贴文本
+            <IconPencil size={14} /> 粘贴文本
           </button>
           <button className="btn ghost" onClick={() => setMode(mode === 'url' ? 'none' : 'url')}>
-            🔗 导入链接
+            <IconLink size={14} /> 导入链接
           </button>
           <button className="btn ghost" onClick={() => setMode(mode === 'juejin' ? 'none' : 'juejin')}>
-            🟦 导入掘金
+            <IconImport size={14} /> 导入掘金
           </button>
           <input
             ref={fileRef}
@@ -181,10 +182,12 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
           {!loading && docs.length === 0 && <p className="panel-sub">知识库为空，先导入一份文档吧</p>}
           {docs.map((d) => (
             <div key={d.source} className="doc-row">
-              <span className="doc-icon">📄</span>
+              <span className="doc-icon"><IconFile size={14} /></span>
               <span className="doc-name" title={d.source}>{d.source}</span>
               <span className="doc-chunks">{d.chunks} 块</span>
-              <button className="doc-del" onClick={() => handleDelete(d.source)} disabled={busy} title="删除文档">✕</button>
+              <button className="doc-del" onClick={() => handleDelete(d.source)} disabled={busy} title="删除文档">
+                <IconX size={12} />
+              </button>
             </div>
           ))}
         </div>
