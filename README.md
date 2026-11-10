@@ -219,7 +219,7 @@ LLM_MODEL=deepseek-flash
 ## 测试
 
 三层验证：**后端单测**、**前端单测**、**真实链路端到端验证**（需要可用 Key）。
-GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest 与前端 vitest + 构建。
+GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest、前端 vitest + 构建，以及 Docker 镜像构建。
 
 ```bash
 cd backend && .venv/bin/python -m pytest tests -q   # 后端 68 用例
@@ -257,30 +257,33 @@ cd backend && .venv/bin/python scripts/verify_real.py
 后端是 Python FastAPI（本地 ONNX embedding + SQLite 文件库 + 磁盘知识目录），
 **不适合** Cloudflare Workers（无法跑 Python/ONNX/文件系统）或 Supabase（仅是数据库 BaaS，非应用运行时）。
 
-### 方式一：Docker 单容器（推荐）
+### 方式一：Docker Compose（推荐）
 
 ```bash
-docker build -t llm-agent .
-docker run -d -p 8000:8000 \
-  -e LLM_BASE_URL=https://api.deepseek.com \
-  -e LLM_API_KEY=你的Key \
-  -e LLM_MODEL=deepseek-flash \
-  -v ./knowledge:/app/backend/knowledge \
-  -v ./data:/app/backend/data \
-  llm-agent
+docker compose up -d --build
 ```
 
+默认只绑定 `127.0.0.1:8000`，适合本机/反向代理前置。公司内网共享时：
+
+```bash
+BIND_ADDR=0.0.0.0 docker compose up -d --build
+```
+
+然后用浏览器打开 `http://服务器IP:8000`，在右上角「接入模型服务」配置供应商、Key 与模型即可。
+知识库与数据分别持久化在 `./backend/knowledge`、`./backend/data`。
+
 多阶段构建：前端 `npm run build` 产物由 FastAPI 托管（SPA 回退已内置），
-**单端口同时服务 API 与页面**；知识库与数据通过 volume 持久化。
-适配 Render / Railway / Fly.io 等支持 Docker 的托管平台，或任意 VPS。
+**单端口同时服务 API 与页面**。Docker 构建在 CI 中验证；依赖使用 `backend/requirements.lock` 锁定。
 
 ### 方式二：手动部署
 
 ```bash
-npm --prefix frontend install && npm --prefix frontend run build
-cd backend && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+npm --prefix frontend ci && npm --prefix frontend run build
+cd backend && .venv/bin/pip install -r requirements.lock
+.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 ```
+
+无 Docker 也能部署；`requirements.lock` 用于可复现安装，`requirements.txt` 保留开发期版本范围。
 
 前后端分离托管也可：前端 `dist/` 部署到 Vercel / Cloudflare Pages，后端单独部署并配置 CORS。
 
@@ -309,6 +312,7 @@ llm-agent
 │       └── components/    # Sidebar / MessageBubble / MarkdownView / PlanCard / TaskBoard ...
 ├── docs/screenshots/      # README 演示截图
 ├── Dockerfile
+├── docker-compose.yml
 └── LICENSE
 ```
 

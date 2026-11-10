@@ -14,8 +14,8 @@ WORKDIR /app/backend
 # fastembed 依赖 ONNX 运行时，安装系统级依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 && rm -rf /var/lib/apt/lists/*
-COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.lock ./
+RUN pip install --no-cache-dir -r requirements.lock
 COPY backend/ ./
 # 前端构建产物放进镜像，由 FastAPI 托管（单端口部署）
 COPY --from=fe /app/frontend/dist /app/frontend/dist
