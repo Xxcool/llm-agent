@@ -55,7 +55,6 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
   const [panelOpen, setPanelOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [comment, setComment] = useState('')
-  const [saved, setSaved] = useState(false)
 
   const copyAll = async () => {
     await navigator.clipboard.writeText(message.content).catch(() => undefined)
@@ -85,10 +84,7 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
     const next = feedback?.type === 'up' ? null : { type: 'up' as const }
     setFeedback(next)
     setPanelOpen(false)
-    if (await persist(message.dbId, next)) {
-      setSaved(true)
-      window.setTimeout(() => setSaved(false), 1500)
-    }
+    await persist(message.dbId, next)
   }
 
   const thumbDown = () => {
@@ -111,8 +107,6 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
     setComment('')
     setReason('')
     await persist(message.dbId, fb)
-    setSaved(true)
-    window.setTimeout(() => setSaved(false), 1500)
   }
 
   const time = formatTime(message.created_at)
@@ -162,7 +156,6 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
                 <IconThumbDown size={14} />
               </button>
               {time && <span className="msg-time">{time}</span>}
-              {saved && <span className="msg-saved">已记录</span>}
             </div>
           )}
           {panelOpen && (
@@ -185,14 +178,20 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
                 ))}
               </div>
               <div className="fb-foot">
-                <input
-                  className="fb-input"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="(可选) 告诉我们更多关于你的使用体验"
-                  onKeyDown={(e) => e.key === 'Enter' && submitDown()}
-                />
-                <button className="fb-submit" onClick={submitDown} disabled={!reason}>
+                {reason === '其他' && (
+                  <input
+                    className="fb-input"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="请说明具体原因"
+                    onKeyDown={(e) => e.key === 'Enter' && submitDown()}
+                  />
+                )}
+                <button
+                  className="fb-submit"
+                  onClick={submitDown}
+                  disabled={!reason || (reason === '其他' && !comment.trim())}
+                >
                   提交
                 </button>
               </div>
