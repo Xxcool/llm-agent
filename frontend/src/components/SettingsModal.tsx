@@ -8,7 +8,7 @@ import moonshotLogo from '../assets/providers/moonshotai.svg'
 import ollamaLogo from '../assets/providers/ollama.svg'
 import anthropicLogo from '../assets/providers/anthropic.svg'
 import zhipuLogo from '../assets/providers/zhipu.svg'
-import googleLogo from '../assets/providers/google.svg'
+import geminiLogo from '../assets/providers/gemini.svg'
 
 interface ProviderPreset {
   name: string
@@ -38,7 +38,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
   Moonshot: moonshotLogo,
   '本地 Ollama': ollamaLogo,
   Claude: anthropicLogo,
-  'Google Gemini': googleLogo,
+  'Google Gemini': geminiLogo,
 }
 
 function ProviderMark({ name, color, size = 20 }: { name: string; color: string; size?: number }) {

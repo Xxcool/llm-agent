@@ -1026,3 +1026,7 @@ body {
   color: var(--text-dim); font-size: 12px; width: 24px; height: 24px; border-radius: 6px;
 }
 .doc-del:hover { background: #fee2e2; color: var(--err); }
+
+/* 首页快捷入口异常态 */
+.quick-chip-error { color: #e5484d; border-color: #f5c6c8; background: #fdecec; }
+.quick-chip-error:hover { border-color: #e5484d; }

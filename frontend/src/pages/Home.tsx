@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { IconApi, IconBook, IconCheck, IconDatabase, IconSparkle, IconWrench } from '../components/icons'
+import { IconAlert, IconApi, IconBook, IconCheck, IconDatabase, IconSparkle, IconWrench } from '../components/icons'
 
 const FEATURES = [
   { icon: <IconDatabase size={20} />, title: 'RAG 检索增强', desc: '企业文档自动分块向量化，回答前检索最相关片段并标注来源文件，内容可追溯' },
@@ -15,6 +15,8 @@ export function Home({
   onOpenSettings,
   onOpenKnowledge,
   onScrollChange,
+  healthState,
+  healthError,
 }: {
   health: { chunks: number } | null
   isDemo: boolean
@@ -23,6 +25,8 @@ export function Home({
   onOpenSettings: () => void
   onOpenKnowledge: () => void
   onScrollChange: (scrolled: boolean) => void
+  healthState?: string
+  healthError?: string | null
 }) {
   const [ask, setAsk] = useState('')
 
@@ -78,9 +82,13 @@ export function Home({
         </div>
       </div>
       <div className="hero-quick rise" style={{ animationDelay: '0.24s' }}>
-        <button className="quick-chip" onClick={onOpenSettings}>
-          {isDemo ? <IconApi size={14} /> : <IconCheck size={14} />}
-          {isDemo ? '接入模型服务' : '模型已接入'}
+        <button
+          className={`quick-chip ${healthState === 'error' ? 'quick-chip-error' : ''}`}
+          onClick={onOpenSettings}
+          title={healthState === 'error' ? healthError ?? undefined : undefined}
+        >
+          {healthState === 'error' ? <IconAlert size={14} /> : isDemo ? <IconApi size={14} /> : <IconCheck size={14} />}
+          {healthState === 'error' ? '模型服务异常' : isDemo ? '接入模型服务' : '模型已接入'}
         </button>
         <button className="quick-chip" onClick={onOpenKnowledge}>
           <IconBook size={14} />

@@ -148,6 +148,8 @@ export default function App() {
             onOpenSettings={() => setShowSettings(true)}
             onOpenKnowledge={() => setShowKnowledge(true)}
             onScrollChange={setHeroScrolled}
+            healthState={healthState}
+            healthError={health?.ok === false ? health.error : null}
           />
         </>
       )}
