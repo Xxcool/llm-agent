@@ -20,3 +20,4 @@ backend/data/
 backend/knowledge/uploads/
 backend/data/runtime_config.json
 backend/personal/
+.pytest_tmp/

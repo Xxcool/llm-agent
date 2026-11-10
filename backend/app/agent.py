@@ -71,11 +71,13 @@ def run_agent(
             except Exception as e:  # noqa: BLE001
                 result = f"检索失败：{e.__class__.__name__}: {e}"
             yield {"type": "tool_result", "name": "search_knowledge", "content": result}
-            # 以标准 assistant(tool_calls)+tool 消息形式回填，兼容 OpenAI 协议
+            # 以标准 assistant(tool_calls)+tool 消息形式回填，兼容 OpenAI 协议；
+            # 思考型模型（DeepSeek flash/reasoner）要求该字段存在，空串即可
             call_id = "forced_search_1"
             messages.append({
                 "role": "assistant",
                 "content": None,
+                "reasoning_content": "",
                 "tool_calls": [{
                     "id": call_id, "type": "function",
                     "function": {"name": "search_knowledge",
@@ -88,7 +90,7 @@ def run_agent(
             resp = provider.chat(messages, tools=tools)
 
             if resp.tool_calls:
-                messages.append({
+                assistant_msg = {
                     "role": "assistant",
                     "content": None,
                     "tool_calls": [
@@ -96,7 +98,11 @@ def run_agent(
                          "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=False)}}
                         for tc in resp.tool_calls
                     ],
-                })
+                }
+                # 思考型模型（DeepSeek reasoner/flash）要求工具调用轮次间回传思考过程
+                if getattr(resp, "reasoning", ""):
+                    assistant_msg["reasoning_content"] = resp.reasoning
+                messages.append(assistant_msg)
                 for tc in resp.tool_calls:
                     yield {"type": "tool_call", "name": tc["name"], "arguments": tc["arguments"]}
                     try:

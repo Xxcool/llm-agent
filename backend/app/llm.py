@@ -10,9 +10,12 @@ from . import config
 class ChatResponse:
     """统一的一轮回复：要么文本增量，要么工具调用列表。"""
 
-    def __init__(self, content: str = "", tool_calls: Optional[list] = None):
+    def __init__(self, content: str = "", tool_calls: Optional[list] = None, reasoning: str = ""):
         self.content = content
         self.tool_calls = tool_calls or []  # [{"id","name","arguments":dict}]
+        # 思考型模型（DeepSeek reasoner/flash 等）的思考过程；
+        # DeepSeek 要求工具调用轮次之间原样回传，否则 400
+        self.reasoning = reasoning
 
 
 class BaseProvider:
@@ -53,7 +56,11 @@ class OpenAICompatProvider(BaseProvider):
             }
             for tc in msg.get("tool_calls") or []
         ]
-        return ChatResponse(content=msg.get("content") or "", tool_calls=tool_calls)
+        return ChatResponse(
+            content=msg.get("content") or "",
+            tool_calls=tool_calls,
+            reasoning=msg.get("reasoning_content") or "",
+        )
 
 
 class MockProvider(BaseProvider):

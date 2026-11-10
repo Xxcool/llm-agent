@@ -88,6 +88,30 @@ LLM_MODEL=deepseek-chat
 
 ## 测试
 
+两层验证：**离线单测**（不需要模型 Key）与**真实链路端到端验证**（需要可用 Key）。
+
+### 1. 单元测试（33 个用例，离线可跑）
+
 ```bash
 cd backend && .venv/bin/python -m pytest tests -q
 ```
+
+| 模块 | 用例数 | 覆盖点 |
+|---|---|---|
+| `test_store.py` | 8 | 会话增删改查、置顶排序、标题自动生成、空会话过滤、反馈持久化、历史顺序 |
+| `test_llm.py` | 10 | MockProvider 检索驱动行为回归、401/402/403/404/429 错误码映射、思考模型 `reasoning_content` 回传 |
+| `test_rag.py` | 4 | 入库增量、已删文件脏块清理回归、delete_source |
+| `test_api.py` | 5 | TestClient 集成：健康检查、配置 Key 掩码、会话生命周期、SSE 全链路、错误持久化 |
+
+测试通过 `conftest.py` 的 `tmp_app` 夹具完全隔离：临时数据库/知识库目录 + HashEmbedder + MockProvider，
+不依赖任何外部服务与网络。
+
+### 2. 真实链路端到端验证（需要可用 Key）
+
+```bash
+cd backend && .venv/bin/python scripts/verify_real.py
+```
+
+脚本自动执行：服务健康检查 → 配置连通性测试 → 注入带唯一标记（TX-XXXX）的测试文档 →
+SSE 提问 → 验证「检索命中标记文档 + 模型回答包含标记 + 消息持久化」→ 清理测试数据。
+全绿即证明：模型接入、Key 配置、RAG 检索、Agent 循环、SSE 流式、持久化整条链路真实可用。
