@@ -2,9 +2,28 @@
 import json
 from typing import Generator, List, Optional
 
+import httpx
+
 from . import config
 from .llm import BaseProvider
 from .tools import TOOLS_SCHEMA, ToolExecutor
+
+# 模型服务 HTTP 错误 → 用户能看懂的提示
+_PROVIDER_ERROR_HINTS = {
+    401: "API Key 无效或未授权",
+    402: "账户余额不足，请充值或更换模型服务",
+    403: "无访问权限（Key 被禁用或模型未开通）",
+    404: "模型不存在，请检查模型名",
+    429: "请求过于频繁，稍后重试",
+}
+
+
+def _provider_error_message(e: Exception) -> str:
+    if isinstance(e, httpx.HTTPStatusError):
+        code = e.response.status_code
+        hint = _PROVIDER_ERROR_HINTS.get(code, f"HTTP {code}")
+        return f"模型服务调用失败：{hint}"
+    return f"{e.__class__.__name__}: {e}"
 
 SYSTEM_PROMPT = (
     "你是企业知识库智能助手，服务于公司内部的制度查询、产品资料检索与业务问答：\n"
@@ -94,5 +113,7 @@ def run_agent(
             return
 
         yield {"type": "error", "message": f"超过最大工具轮数（{config.MAX_TOOL_ROUNDS}），已停止。"}
+    except httpx.HTTPStatusError as e:
+        yield {"type": "error", "message": _provider_error_message(e)}
     except Exception as e:  # noqa: BLE001
-        yield {"type": "error", "message": f"{e.__class__.__name__}: {e}"}
+        yield {"type": "error", "message": _provider_error_message(e)}

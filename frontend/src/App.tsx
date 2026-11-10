@@ -42,14 +42,24 @@ export default function App() {
 
   const isDemo = health?.provider === 'mock'
 
-  // 首页提问：创建会话 → 跳转会话页并携带首条消息
+  // 首页提问：新页签打开会话页（首页保留），问题通过 URL 参数带走
   const askOnHome = useCallback(
     async (text: string) => {
       if (creating) return
       setCreating(true)
+      // 同步先开空白页签，避免 await 之后被浏览器当弹窗拦截
+      const win = window.open('', '_blank')
       try {
         const s = await createSession()
-        navigate(`/c/${s.id}`, { pending: text })
+        const url = `/c/${s.id}?ask=${encodeURIComponent(text)}`
+        if (win) {
+          win.location.href = url
+        } else {
+          // 弹窗被拦截时降级为当前页跳转
+          navigate(url.replace('?ask=' + encodeURIComponent(text), ''), { pending: text })
+        }
+      } catch {
+        win?.close()
       } finally {
         setCreating(false)
       }

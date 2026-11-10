@@ -66,12 +66,40 @@ export function ChatPage({
       .catch(() => setMessages([]))
   }
 
+  const sendRef = useRef<(text: string) => void>(() => undefined)
+
   useEffect(() => {
     let cancelled = false
     setMessages([])
     setTitle('')
-    if (cancelled) return
-    void loadMessages()
+
+    // 首页提问：?ask= 参数（新页签）或 history.state.pending（同页兜底）
+    // 注意：先只读取不清理——StrictMode 下 effect 会执行两次，提前清理会让第二次拿不到参数
+    const params = new URLSearchParams(window.location.search)
+    const ask = params.get('ask')
+    const st = window.history.state as { pending?: string } | null
+    const pending = st?.pending ?? null
+
+    // 先加载历史，加载完再自动发问，避免重载把流式消息冲掉
+    getSessionMessages(sessionId)
+      .then((rows) => {
+        if (!cancelled) setMessages(rows.map((r) => ({ ...r, id: nextId++, dbId: r.id })))
+      })
+      .catch(() => {
+        if (!cancelled) setMessages([])
+      })
+      .finally(() => {
+        const text = ask || pending
+        if (!cancelled && text) {
+          window.setTimeout(() => {
+            // 发送时才清理 URL/状态，避免 StrictMode 双执行吞掉参数
+            if (ask) window.history.replaceState({}, '', `/c/${sessionId}`)
+            if (pending) window.history.replaceState({ ...window.history.state, pending: null }, '')
+            sendRef.current(text)
+          }, 100)
+        }
+      })
+
     getSession(sessionId)
       .then((s) => {
         if (!cancelled) setTitle(s.title)
@@ -86,18 +114,6 @@ export function ChatPage({
   const refreshTitle = () => {
     getSession(sessionId).then((s) => setTitle(s.title)).catch(() => undefined)
   }
-
-  const sendRef = useRef<(text: string) => void>(() => undefined)
-
-  useEffect(() => {
-    const st = window.history.state as { pending?: string } | null
-    if (st?.pending) {
-      const text = st.pending
-      window.history.replaceState({ ...st, pending: null }, '')
-      const t = window.setTimeout(() => sendRef.current(text), 120)
-      return () => window.clearTimeout(t)
-    }
-  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
