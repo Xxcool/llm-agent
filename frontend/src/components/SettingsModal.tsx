@@ -6,6 +6,7 @@ import deepseekLogo from '../assets/providers/deepseek.svg'
 import qwenLogo from '../assets/providers/qwen.svg'
 import moonshotLogo from '../assets/providers/moonshotai.svg'
 import ollamaLogo from '../assets/providers/ollama.svg'
+import anthropicLogo from '../assets/providers/anthropic.svg'
 
 interface ProviderPreset {
   name: string
@@ -23,6 +24,7 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
   { name: '硅基流动', base_url: 'https://api.siliconflow.cn/v1', color: '#7C3AED', models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-7B-Instruct', 'THUDM/glm-4-9b-chat'] },
   { name: 'Mistral', base_url: 'https://api.mistral.ai/v1', color: '#FA520F', models: ['mistral-small-latest', 'mistral-large-latest'] },
   { name: 'Google Gemini', base_url: 'https://generativelanguage.googleapis.com/v1beta/openai', color: '#4796E3', models: ['gemini-2.0-flash', 'gemini-1.5-pro'] },
+  { name: 'Claude', base_url: 'https://api.anthropic.com/v1', color: '#191919', models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-1'] },
   { name: '本地 Ollama', base_url: 'http://localhost:11434/v1', color: '#4B5568', models: ['llama3.1', 'qwen2.5', 'deepseek-r1'] },
 ]
 
@@ -32,6 +34,7 @@ const PROVIDER_LOGOS: Record<string, string> = {
   通义千问: qwenLogo,
   Moonshot: moonshotLogo,
   '本地 Ollama': ollamaLogo,
+  Claude: anthropicLogo,
 }
 
 function ProviderMark({ name, color, size = 20 }: { name: string; color: string; size?: number }) {
