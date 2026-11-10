@@ -257,8 +257,8 @@ export function Sidebar({
     <aside className="sidebar">
       <div className="sb-top">
         <button className="sb-brand" onClick={() => (window.location.pathname = '/')} title="返回首页">
-          <IconBolt size={15} />
-          LLM Agent
+          <span className="logo"><IconBolt size={14} /></span>
+          <span className="sb-brand-name">LLM Agent</span>
         </button>
         <div className="sb-top-actions">
           <button className="icon-btn" onClick={() => setShowSearch(true)} title="搜索对话">

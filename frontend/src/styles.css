@@ -273,13 +273,10 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 14px 10px;
 }
-.sb-brand {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 14.5px; font-weight: 600; color: var(--text);
-  cursor: pointer; border: none; background: none; padding: 4px;
-  font-family: inherit; border-radius: 8px;
-}
-.sb-brand svg { color: var(--accent); }
+.sb-brand { display: flex; align-items: center; gap: 8px; cursor: pointer; border: none; background: none; padding: 4px; font-family: inherit; border-radius: 8px; }
+.sb-brand svg { color: #fff; }
+.sb-brand .logo { width: 26px; height: 26px; border-radius: 7px; box-shadow: none; }
+.sb-brand-name { font-size: 14.5px; font-weight: 600; color: var(--text); }
 .sb-brand:hover { background: rgba(15, 17, 20, 0.04); }
 .icon-btn {
   display: grid; place-items: center;
