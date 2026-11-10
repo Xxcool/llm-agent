@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Node
+node_modules/
+frontend/dist/
+
+# 个人真实资料不入仓库
+backend/knowledge/personal/
+backend/data/
+
+# 环境变量
+.env
+.env.local
+.DS_Store
+*.tsbuildinfo

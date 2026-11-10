@@ -1,0 +1,63 @@
+"""离线测试：RAG 检索 + Agent 循环 + 工具执行，全程 Mock Provider / Hash Embedder。"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app import config  # noqa: E402
+from app.agent import run_agent  # noqa: E402
+from app.llm import MockProvider  # noqa: E402
+from app.rag import RagStore  # noqa: E402
+from app.tools import ToolExecutor  # noqa: E402
+
+
+def make_store(tmp_path):
+    cfg = type("C", (), {**vars(config),
+                         "DB_PATH": tmp_path / "test.sqlite3",
+                         "KNOWLEDGE_DIR": tmp_path / "kb",
+                         "TOP_K": 3})()
+    kb = tmp_path / "kb"
+    kb.mkdir(parents=True)
+    (kb / "team-intro.md").write_text(
+        "# 平台研发组\n\n9 年前端经验，核心项目：统一身份认证平台（Java + Spring Cloud），"
+        "运维监控中心（Go + Prometheus），以及开发中的 LLM Agent 智能对话平台。\n",
+        encoding="utf-8",
+    )
+    (kb / "notes.md").write_text(
+        "# 技术笔记\n\nSSE 流式接口需要注意 EventSource 不支持 POST，需用 fetch 流式读取或 polyfill。\n",
+        encoding="utf-8",
+    )
+    store = RagStore(cfg.DB_PATH)
+    store.embedder = __import__("app.embedder", fromlist=["HashEmbedder"]).HashEmbedder()
+    store.ingest_dir(kb)
+    return store, cfg
+
+
+def test_rag_search(tmp_path):
+    store, _ = make_store(tmp_path)
+    hits = store.search("数字孪生")
+    assert hits, "检索应有结果"
+    assert any("智慧仓储" in t for _, t, _ in hits)
+
+
+def test_agent_loop_with_tools(tmp_path):
+    store, _ = make_store(tmp_path)
+    executor = ToolExecutor(store)
+    events = list(run_agent(MockProvider(), executor, "平台研发组做过哪些项目？"))
+    types = [e["type"] for e in events]
+    assert "tool_call" in types and "tool_result" in types, types
+    assert types[-1] == "done"
+    answer = "".join(e["content"] for e in events if e["type"] == "token")
+    assert "智慧仓储" in answer
+
+
+def test_tool_unknown(tmp_path):
+    store, _ = make_store(tmp_path)
+    executor = ToolExecutor(store)
+    assert "未知工具" in executor.run("nope", {})
+
+
+def test_fetch_url_rejects_non_http(tmp_path):
+    store, _ = make_store(tmp_path)
+    executor = ToolExecutor(store)
+    assert "仅支持" in executor.run("fetch_url", {"url": "file:///etc/passwd"})
