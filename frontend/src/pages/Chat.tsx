@@ -130,8 +130,25 @@ export function ChatPage({
     getSession(sid).then((s) => setTitle(s.title)).catch(() => undefined)
   }
 
+  // 切换会话/加载历史后瞬时定位到底部（不播滚动动画）；后续新消息才平滑滚动
+  const jumpOnLoadRef = useRef(true)
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // 会话切换：下次 messages 就绪时直接跳底
+    jumpOnLoadRef.current = true
+  }, [sessionId])
+
+  useEffect(() => {
+    if (messages.length === 0) return
+    if (jumpOnLoadRef.current) {
+      jumpOnLoadRef.current = false
+      // 瞬时定位，无滚动动画；稍后再校正一次（图片/代码高亮异步撑高内容）
+      const jump = () => bottomRef.current?.scrollIntoView({ block: 'end' })
+      jump()
+      window.setTimeout(jump, 80)
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages])
 
   const runStream = (text: string, withUserBubble: boolean) => {
