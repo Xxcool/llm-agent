@@ -210,3 +210,17 @@ export function IconDownload({ size = 16 }: IconProps) {
     </svg>
   )
 }
+
+/** 对话气泡（首页「开始对话」入口等） */
+export function IconChat({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none">
+      <path
+        d="M8 2.2C4.4 2.2 1.7 4.7 1.7 7.8c0 1.7.8 3.2 2.1 4.3l-.5 2.2 2.5-1c.7.2 1.4.3 2.2.3 3.6 0 6.3-2.5 6.3-5.8S11.6 2.2 8 2.2Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}

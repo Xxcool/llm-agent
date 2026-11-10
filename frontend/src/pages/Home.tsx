@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { IconAlert, IconApi, IconBook, IconCheck, IconDatabase, IconSparkle, IconWrench } from '../components/icons'
+import { IconAlert, IconApi, IconBook, IconChat, IconCheck, IconDatabase, IconSparkle, IconWrench } from '../components/icons'
 
 const FEATURES = [
   { icon: <IconDatabase size={20} />, title: 'RAG 检索增强', desc: '企业文档自动分块向量化，回答前检索最相关片段并标注来源文件，内容可追溯' },
@@ -12,6 +12,7 @@ export function Home({
   isDemo,
   creating,
   onAsk,
+  onOpenChat,
   onOpenSettings,
   onOpenKnowledge,
   onScrollChange,
@@ -22,6 +23,8 @@ export function Home({
   isDemo: boolean
   creating: boolean
   onAsk: (text: string) => void
+  /** 不提问直接进入新对话页 */
+  onOpenChat: () => void
   onOpenSettings: () => void
   onOpenKnowledge: () => void
   onScrollChange: (scrolled: boolean) => void
@@ -82,6 +85,10 @@ export function Home({
         </div>
       </div>
       <div className="hero-quick rise" style={{ animationDelay: '0.24s' }}>
+        <button className="quick-chip quick-chip-primary" onClick={onOpenChat} title="不提问，直接进入对话">
+          <IconChat size={14} />
+          开始对话
+        </button>
         <button
           className={`quick-chip ${healthState === 'error' ? 'quick-chip-error' : ''}`}
           onClick={onOpenSettings}
