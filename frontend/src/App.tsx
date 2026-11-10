@@ -172,6 +172,7 @@ export default function App() {
             creating={creating}
             onAsk={askOnHome}
             onOpenChat={() => navigate('/c/new')}
+            onStartPlan={() => navigate('/c/new?plan=1')}
             onOpenSettings={() => setShowSettings(true)}
             onOpenKnowledge={() => setShowKnowledge(true)}
             onScrollChange={setHeroScrolled}

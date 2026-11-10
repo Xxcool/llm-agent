@@ -109,6 +109,12 @@ export function ChatPage({
     const st = window.history.state as { pending?: string } | null
     const pending = st?.pending ?? null
 
+    // 首页「结构化方案」卡片入口：?plan=1 直接开启方案模式
+    if (params.get('plan') === '1') {
+      setPlanMode(true)
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+
     if (sessionId) {
       // 先加载历史，加载完再自动发问，避免重载把流式消息冲掉
       getSessionMessages(sessionId)

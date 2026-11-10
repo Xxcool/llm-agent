@@ -1,11 +1,38 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { IconAlert, IconApi, IconBook, IconChat, IconCheck, IconDatabase, IconPlan, IconSparkle, IconWrench } from '../components/icons'
 
-const FEATURES = [
-  { icon: <IconDatabase size={20} />, title: 'RAG 检索增强', desc: '企业文档按段落分块向量化，回答前检索最相关片段并标注来源文件，内容可追溯' },
-  { icon: <IconPlan size={20} />, title: '结构化方案', desc: '基于检索证据生成实施方案：目标、步骤、依据与风险一目了然，人工确认后才进入执行', isNew: true },
-  { icon: <IconWrench size={20} />, title: 'Function Calling', desc: '智能体按需调用知识检索、网页抓取与方案生成工具，多轮闭环完成复杂任务' },
-  { icon: <IconSparkle size={20} />, title: 'SSE 流式输出', desc: 'Fetch Stream 逐字呈现回答，工具调用与方案生成过程实时可视化' },
+type FeatureAction = 'knowledge' | 'plan' | 'chat'
+
+const FEATURES: { icon: ReactNode; title: string; desc: string; action: FeatureAction; cta: string }[] = [
+  {
+    icon: <IconDatabase size={20} />,
+    title: 'RAG 检索增强',
+    desc: '企业文档按段落分块向量化，回答前检索最相关片段并标注来源文件，内容可追溯',
+    action: 'knowledge',
+    cta: '管理知识库',
+  },
+  {
+    icon: <IconPlan size={20} />,
+    title: '结构化方案',
+    desc: '基于检索证据生成实施方案：目标、步骤、依据与风险一目了然，人工确认后才进入执行',
+    action: 'plan',
+    cta: '生成一个方案',
+  },
+  {
+    icon: <IconWrench size={20} />,
+    title: 'Function Calling',
+    desc: '智能体按需调用知识检索、网页抓取与方案生成工具，多轮闭环完成复杂任务',
+    action: 'chat',
+    cta: '看看工具调用',
+  },
+  {
+    icon: <IconSparkle size={20} />,
+    title: 'SSE 流式输出',
+    desc: 'Fetch Stream 逐字呈现回答，工具调用与方案生成过程实时可视化',
+    action: 'chat',
+    cta: '体验流式输出',
+  },
 ]
 
 export function Home({
@@ -16,6 +43,7 @@ export function Home({
   onOpenChat,
   onOpenSettings,
   onOpenKnowledge,
+  onStartPlan,
   onScrollChange,
   healthState,
   healthError,
@@ -28,11 +56,19 @@ export function Home({
   onOpenChat: () => void
   onOpenSettings: () => void
   onOpenKnowledge: () => void
+  /** 进入新对话并默认开启方案模式 */
+  onStartPlan: () => void
   onScrollChange: (scrolled: boolean) => void
   healthState?: string
   healthError?: string | null
 }) {
   const [ask, setAsk] = useState('')
+
+  const featureHandler = (action: FeatureAction) => {
+    if (action === 'knowledge') onOpenKnowledge()
+    else if (action === 'plan') onStartPlan()
+    else onOpenChat()
+  }
 
   return (
     <main
@@ -105,15 +141,24 @@ export function Home({
       </div>
 
       <section className="hero-features">
-        {FEATURES.map((f) => (
-          <div className={`feature-card ${f.isNew ? 'feature-new' : ''}`} key={f.title}>
-            <div className="feature-icon">{f.icon}</div>
-            <h3>
-              {f.title}
-              {f.isNew && <span className="feature-badge">新</span>}
-            </h3>
+        {FEATURES.map((f, i) => (
+          <button
+            type="button"
+            className="feature-card"
+            key={f.title}
+            onClick={() => featureHandler(f.action)}
+          >
+            <span className="feature-num">{String(i + 1).padStart(2, '0')}</span>
+            <span className="feature-icon">{f.icon}</span>
+            <h3>{f.title}</h3>
             <p>{f.desc}</p>
-          </div>
+            <span className="feature-cta">
+              {f.cta}
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden>
+                <path d="M3 8h9.4M9 4.4 12.6 8 9 11.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          </button>
         ))}
       </section>
     </main>
