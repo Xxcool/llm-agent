@@ -187,11 +187,7 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
                     onKeyDown={(e) => e.key === 'Enter' && submitDown()}
                   />
                 )}
-                <button
-                  className="fb-submit"
-                  onClick={submitDown}
-                  disabled={!reason || (reason === '其他' && !comment.trim())}
-                >
+                <button className="fb-submit" onClick={submitDown} disabled={!reason}>
                   提交
                 </button>
               </div>
