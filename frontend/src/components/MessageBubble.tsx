@@ -12,17 +12,18 @@ export function toolLabel(name: string): string {
   return TOOL_LABELS[name] ?? `🛠 ${name}`
 }
 
-export function MessageBubble({ message }: { message: ChatMessage }) {
+export function MessageBubble({ message, streaming }: { message: ChatMessage; streaming?: boolean }) {
   const isUser = message.role === 'user'
   return (
-    <div className={`bubble ${isUser ? 'user' : 'assistant'}`}>
+    <div className={`bubble ${isUser ? 'user' : 'assistant'} ${streaming ? 'streaming' : ''}`}>
       {isUser ? (
         <div className="bubble-text">{message.content}</div>
       ) : (
         <div className="bubble-md">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {message.content || (message.error ? '' : '…')}
+            {message.content || ''}
           </ReactMarkdown>
+          {streaming && !message.content && <span className="thinking-dots"><i /><i /><i /></span>}
           {message.error && <div className="bubble-error">⚠️ {message.error}</div>}
         </div>
       )}
