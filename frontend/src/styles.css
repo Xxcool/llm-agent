@@ -894,6 +894,7 @@ body {
   border-radius: 50%; color: #fff; font-weight: 600;
   flex-shrink: 0; line-height: 1;
 }
+.provider-img { display: block; border-radius: 4px; flex-shrink: 0; }
 /* 模型名称自定义下拉 */
 .model-combo { position: relative; display: flex; }
 .model-combo input { flex: 1; min-width: 0; padding-right: 38px; }
