@@ -24,6 +24,18 @@ class BaseProvider:
     def chat(self, messages: list, tools: Optional[list] = None) -> ChatResponse:
         raise NotImplementedError
 
+    def chat_stream(self, messages: list, tools: Optional[list] = None) -> Generator[dict, None, None]:
+        """默认降级：不支持真流式的 Provider 仍产出 token/done 事件。"""
+        resp = self.chat(messages, tools)
+        if resp.content:
+            yield {"type": "token", "content": resp.content}
+        yield {
+            "type": "done",
+            "content": resp.content,
+            "tool_calls": resp.tool_calls,
+            "reasoning": resp.reasoning,
+        }
+
 
 class OpenAICompatProvider(BaseProvider):
     """OpenAI 兼容 /chat/completions（GLM、DeepSeek、Moonshot 等）。"""
@@ -61,6 +73,89 @@ class OpenAICompatProvider(BaseProvider):
             tool_calls=tool_calls,
             reasoning=msg.get("reasoning_content") or "",
         )
+
+    def chat_stream(self, messages: list, tools: Optional[list] = None) -> Generator[dict, None, None]:
+        """OpenAI 兼容流式接口：逐 token 产出，tool_calls 参数分片在内部聚合。
+
+        约定事件：
+        - {"type":"token","content":...}：正文增量
+        - {"type":"done","content","tool_calls","reasoning"}：本轮结束时的完整状态
+        """
+        payload = {"model": self.model, "messages": messages, "temperature": 0.3, "stream": True}
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        # OpenAI 流式 tool_calls 按 index 分片到达：先累积字符串，结束后再解析 JSON
+        tool_slots: dict[int, dict] = {}
+
+        with httpx.stream(
+            "POST",
+            f"{self.base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json=payload,
+            timeout=config.LLM_TIMEOUT,
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data or data == "[DONE]":
+                    continue
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+
+                content = delta.get("content")
+                if content:
+                    content_parts.append(content)
+                    yield {"type": "token", "content": content}
+
+                reasoning = delta.get("reasoning_content") or delta.get("reasoning")
+                if reasoning:
+                    reasoning_parts.append(reasoning)
+
+                for tc in delta.get("tool_calls") or []:
+                    index = tc.get("index", 0)
+                    slot = tool_slots.setdefault(index, {"id": "", "name": "", "arguments": ""})
+                    if tc.get("id"):
+                        slot["id"] = tc["id"]
+                    fn = tc.get("function") or {}
+                    if fn.get("name"):
+                        slot["name"] += fn["name"]
+                    args = fn.get("arguments")
+                    if isinstance(args, str):
+                        slot["arguments"] += args
+
+        tool_calls = []
+        for index in sorted(tool_slots):
+            slot = tool_slots[index]
+            if not slot["name"]:
+                continue
+            try:
+                arguments = json.loads(slot["arguments"] or "{}")
+            except json.JSONDecodeError as e:
+                raise ValueError(f"工具参数不是合法 JSON：{e}") from e
+            tool_calls.append({
+                "id": slot["id"] or f"call_{index}",
+                "name": slot["name"],
+                "arguments": arguments,
+            })
+
+        yield {
+            "type": "done",
+            "content": "".join(content_parts),
+            "tool_calls": tool_calls,
+            "reasoning": "".join(reasoning_parts),
+        }
 
 
 class MockProvider(BaseProvider):

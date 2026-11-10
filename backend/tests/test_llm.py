@@ -1,13 +1,16 @@
 """LLM 适配层测试：MockProvider 行为 + 模型服务错误码映射。"""
+import json
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx  # noqa: E402
+import pytest  # noqa: E402
 
 from app.agent import _provider_error_message, run_agent  # noqa: E402
-from app.llm import BaseProvider, ChatResponse, MockProvider  # noqa: E402
+from app.llm import BaseProvider, ChatResponse, MockProvider, OpenAICompatProvider  # noqa: E402
 
 
 def _messages(user_msg: str, tool_result: str | None = None) -> list:
@@ -152,3 +155,96 @@ def test_forced_retrieval_message_has_reasoning_field(tmp_path, monkeypatch):
     first_round = provider.calls[0]
     forced = [m for m in first_round if m.get("role") == "assistant" and m.get("tool_calls")]
     assert forced and "reasoning_content" in forced[0]
+
+
+class _FakeStreamResponse:
+    def __init__(self, lines: list[str]):
+        self.lines = lines
+
+    def raise_for_status(self):
+        return None
+
+    def iter_lines(self):
+        return iter(self.lines)
+
+
+def _sse(delta: dict) -> str:
+    return "data: " + json.dumps({"choices": [{"delta": delta}]}, ensure_ascii=False)
+
+
+def _fake_stream(monkeypatch, lines: list[str], captured: dict | None = None):
+    @contextmanager
+    def fake_stream(method, url, **kwargs):
+        if captured is not None:
+            captured.update(kwargs)
+        yield _FakeStreamResponse(lines)
+
+    monkeypatch.setattr("app.llm.httpx.stream", fake_stream)
+
+
+def test_openai_stream_parses_tokens(monkeypatch):
+    captured = {}
+    lines = [_sse({"content": "你"}), _sse({"content": "好"}), "data: [DONE]"]
+    _fake_stream(monkeypatch, lines, captured)
+    provider = OpenAICompatProvider("https://api.x.com/v1", "key", "model")
+    events = list(provider.chat_stream([{"role": "user", "content": "hi"}]))
+
+    assert [e["content"] for e in events if e["type"] == "token"] == ["你", "好"]
+    done = events[-1]
+    assert done["type"] == "done" and done["content"] == "你好"
+    assert captured["json"]["stream"] is True
+
+
+def test_openai_stream_assembles_tool_call_fragments(monkeypatch):
+    first = {"tool_calls": [{"index": 0, "id": "call_1", "type": "function",
+                             "function": {"name": "search_knowledge", "arguments": '{"query":'}}]}
+    second = {"tool_calls": [{"index": 0, "function": {"arguments": '"报销"}'}}]}
+    lines = [_sse(first), _sse(second), "data: [DONE]"]
+    _fake_stream(monkeypatch, lines)
+    provider = OpenAICompatProvider("https://api.x.com/v1", "key", "model")
+    events = list(provider.chat_stream([{"role": "user", "content": "hi"}], tools=[{"type": "function"}]))
+
+    done = events[-1]
+    assert done["tool_calls"] == [{
+        "id": "call_1",
+        "name": "search_knowledge",
+        "arguments": {"query": "报销"},
+    }]
+
+
+def test_openai_stream_keeps_reasoning(monkeypatch):
+    lines = [
+        _sse({"reasoning_content": "先检索"}),
+        _sse({"content": "答案"}),
+        "data: [DONE]",
+    ]
+    _fake_stream(monkeypatch, lines)
+    provider = OpenAICompatProvider("https://api.x.com/v1", "key", "model")
+    events = list(provider.chat_stream([{"role": "user", "content": "hi"}]))
+
+    assert events[-1]["reasoning"] == "先检索"
+    assert events[-1]["content"] == "答案"
+
+
+def test_openai_stream_rejects_invalid_tool_json(monkeypatch):
+    fragment = {"tool_calls": [{"index": 0, "id": "c1", "type": "function",
+                                "function": {"name": "search_knowledge", "arguments": "{bad"}}]}
+    _fake_stream(monkeypatch, [_sse(fragment), "data: [DONE]"])
+    provider = OpenAICompatProvider("https://api.x.com/v1", "key", "model")
+    with pytest.raises(ValueError, match="工具参数"):
+        list(provider.chat_stream([{"role": "user", "content": "hi"}]))
+
+
+def test_agent_streams_incremental_tokens():
+    """Agent 应把 Provider 的 token 分片原样作为多个 SSE token 事件抛出。"""
+    class StreamingProvider(BaseProvider):
+        name = "stream"
+
+        def chat_stream(self, messages, tools=None):
+            yield {"type": "token", "content": "你"}
+            yield {"type": "token", "content": "好"}
+            yield {"type": "done", "content": "你好", "tool_calls": [], "reasoning": ""}
+
+    events = list(run_agent(StreamingProvider(), None, "hi"))
+    assert [e["content"] for e in events if e["type"] == "token"] == ["你", "好"]
+    assert events[-1]["type"] == "done"

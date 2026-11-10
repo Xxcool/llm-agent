@@ -10,9 +10,6 @@ import { IconBolt } from '../components/icons'
 
 let nextId = 1
 
-const TYPE_INTERVAL = 18
-const TYPE_CHARS = 3
-
 export function ChatPage({
   sessionId,
   refreshSessions,
@@ -39,36 +36,7 @@ export function ChatPage({
   // 草稿模式创建会话后记录在这里（不触发重渲染，避免流式过程被打断）
   const activeSessionRef = useRef<string | null>(sessionId)
 
-  const typeQueueRef = useRef('')
-  const typeTargetRef = useRef<number | null>(null)
-  const typeTimerRef = useRef<number | null>(null)
   const thinkingRef = useRef(false)
-
-  const flushTypeBuffer = () => {
-    if (typeTimerRef.current !== null) return
-    typeTimerRef.current = window.setInterval(() => {
-      if (!typeQueueRef.current) {
-        if (!thinkingRef.current) {
-          window.clearInterval(typeTimerRef.current!)
-          typeTimerRef.current = null
-          setTypingId(null)
-        }
-        return
-      }
-      const take = typeQueueRef.current.slice(0, TYPE_CHARS)
-      typeQueueRef.current = typeQueueRef.current.slice(TYPE_CHARS)
-      const id = typeTargetRef.current
-      if (id !== null) {
-        setMessages((m) =>
-          m.map((msg) => (msg.id === id ? { ...msg, content: msg.content + take } : msg)),
-        )
-      }
-    }, TYPE_INTERVAL)
-  }
-
-  useEffect(() => () => {
-    if (typeTimerRef.current !== null) window.clearInterval(typeTimerRef.current)
-  }, [])
 
   // 加载会话历史与标题；若携带首条消息（首页跳转而来）自动发送
   const loadMessages = () => {
@@ -214,9 +182,6 @@ export function ChatPage({
     setThinking(true)
     thinkingRef.current = true
     setTypingId(assistantMsg.id)
-    typeTargetRef.current = assistantMsg.id
-    typeQueueRef.current = ''
-    flushTypeBuffer()
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -250,7 +215,8 @@ export function ChatPage({
             break
           }
           case 'token':
-            typeQueueRef.current += event.content
+            // 真流式：收到增量立即追加，不再走固定速度的打字机队列
+            patch((msg) => ({ ...msg, content: msg.content + event.content }))
             break
           case 'plan':
             // 多方案：同一轮可能产出多个候选，按 id 追加（同 id 覆盖）
@@ -280,6 +246,7 @@ export function ChatPage({
       .finally(() => {
         thinkingRef.current = false
         setThinking(false)
+        setTypingId(null)
         abortRef.current = null
         refreshSessions()
         refreshTitle()
@@ -330,7 +297,6 @@ export function ChatPage({
 
   const stop = () => {
     abortRef.current?.abort()
-    typeQueueRef.current = ''
   }
 
   return (

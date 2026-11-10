@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-75%20passed-3fb950)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-81%20passed-3fb950)](.github/workflows/ci.yml)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
 
@@ -41,14 +41,14 @@
 | **任务拆解与执行（P3）** | 已确认方案一键拆解为 3-6 个可执行任务（含类型/做法/预期产出），逐任务执行生成 **Markdown 交付物**并在看板中预览 |
 | **代码交付与 diff 审批（M4）** | 代码类任务产出**文件 diff 预览**，人工批准后写入工作区沙箱，自动做 Python 语法 / JSON 解析校验；路径白名单防穿越，命令执行默认关闭 |
 | **Function Calling** | 智能体按需调用 `search_knowledge`（知识库检索）与 `fetch_url`（网页正文抓取），工具结果回填后继续推理，最多 6 轮闭环 |
-| **SSE 事件流** | 前端用 `fetch + ReadableStream` 自行解析 SSE（POST 场景，不用 EventSource），工具/方案/结果事件实时推送，正文打字机式渲染；当前模型调用为整段返回，非 token 级流式 |
+| **SSE 流式输出** | 前端用 `fetch + ReadableStream` 自行解析 SSE（POST 场景，不用 EventSource）；最终回答逐 token 推送，工具调用与方案 JSON 仍整轮缓冲，保证可靠性 |
 | **思考型模型兼容** | 适配 DeepSeek 等思考模型：工具调用轮回传 `reasoning_content`，避免 400 |
 | **多服务商接入** | 在线配置 API 地址 / Key / 模型，内置 DeepSeek、智谱、通义千问、Moonshot、硅基流动、Mistral、Gemini、Claude、Ollama 预设；保存前真实调用验证 |
 | **知识库四种录入** | 上传文件夹（保留目录结构）/ 上传文件 / 文本录入 / 链接批量抓取 |
 | **富文本渲染** | 代码块（高亮/复制/下载）、表格（复制 CSV）、mermaid 流程图、LaTeX 公式、图片/音视频/文件卡片 |
 | **消息操作** | 复制 / 重新生成 / 朗读（Edge 神经语音 + 播放声波动画）/ 点赞点踩（原因面板，持久化） |
 | **会话管理** | 搜索、置顶、重命名、多选批量操作、空会话不进入历史列表（前端首条消息时才创建） |
-| **测试体系** | 58 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 17 个前端用例 + 真实链路端到端验证脚本 |
+| **测试体系** | 64 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 17 个前端用例 + 真实链路端到端验证脚本 |
 
 ## 架构
 
@@ -107,14 +107,14 @@ sequenceDiagram
     A->>R: 余弦检索 Top-4（阈值 0.58）
     R-->>A: 片段 + 来源文件
     A->>L: 回填 tool_result（含 reasoning_content）
-    L-->>A: 完整回复（当前非 token 流）
+    L-->>A: 流式 token（工具/方案参数缓冲）
     A-->>B: token / tool_result 事件
     B-->>F: SSE 逐事件推送
-    F-->>U: 打字机渲染 + 工具时间线 + 来源标注
+    F-->>U: 逐 token 渲染 + 工具时间线 + 来源标注
     B->>B: 消息与工具步骤持久化
 ```
 
-> 说明：LLM 调用当前为整段返回后一次性产出，前端用打字机效果播放；SSE 仍用于工具调用、方案与结果的逐事件推送。真正的 token 级流式尚未实现。
+> 说明：最终自然语言回答通过 OpenAI 兼容流式接口逐 token 推送；工具调用参数与 `draft_plan` JSON 仍需完整到达后再执行/校验，因此这两类事件是整轮缓冲的。前端收到 token 后直接追加，不再使用固定速度的打字机队列。
 
 ## 技术栈
 
@@ -215,7 +215,7 @@ LLM_MODEL=deepseek-flash
 GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest 与前端 vitest + 构建。
 
 ```bash
-cd backend && .venv/bin/python -m pytest tests -q   # 后端 58 用例
+cd backend && .venv/bin/python -m pytest tests -q   # 后端 64 用例
 cd frontend && npm test                             # 前端 17 用例
 ```
 
@@ -232,12 +232,12 @@ cd frontend && npm test                             # 前端 17 用例
 | 模块 | 用例数 | 覆盖点 |
 |---|---|---|
 | `test_store.py` | 8 | 会话增删改查、置顶排序、标题自动生成、空会话过滤、反馈持久化、历史顺序 |
-| `test_llm.py` | 10 | MockProvider 检索驱动行为、401/402/403/404/429 错误码映射、思考模型 `reasoning_content` 回传 |
+| `test_llm.py` | 15 | MockProvider 行为、错误码映射、思考模型 `reasoning_content`、流式 token/tool_calls 分片/reasoning/非法 JSON、Agent 增量 token |
 | `test_rag.py` | 5 | 入库增量、已删文件脏块清理、delete_source、LIKE 通配符转义 |
 | `test_agent.py` | 8 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验、SSRF 内网/重定向拦截 |
 | `test_plans.py` | 7 | 方案规范化与校验、多候选 SSE、选择互斥、单方案兼容、非法参数容错 |
 | `test_tasks.py` | 7 | 任务拆解与幂等、未确认方案拦截、文档交付、代码 diff 审批与落盘校验、绝对路径/穿越防护、任务状态守卫、文件数上限 |
-| `test_api.py` | 13 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式 |
+| `test_api.py` | 14 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路/多 token 事件、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式 |
 
 真实链路（服务健康 → 配置连通 → 注入标记文档 → SSE 提问 → 断言检索命中 + 回答含标记 + 持久化 → 清理）：
 

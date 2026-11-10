@@ -250,3 +250,24 @@ def test_make_provider_respects_mock_mode(tmp_app, monkeypatch):
     monkeypatch.setattr(tmp_app.config, "LLM_PROVIDER", "mock")
     monkeypatch.setattr(tmp_app.config, "LLM_API_KEY", "sk-test")
     assert tmp_app._make_provider().name == "mock"
+
+
+def test_chat_emits_multiple_streamed_token_events(tmp_app):
+    """真流式回归：Provider 的多个 token 分片应原样变成多个 SSE token 事件。"""
+    class StreamingProvider:
+        name = "stream"
+
+        def chat_stream(self, messages, tools=None):
+            yield {"type": "token", "content": "你"}
+            yield {"type": "token", "content": "好"}
+            yield {"type": "done", "content": "你好", "tool_calls": [], "reasoning": ""}
+
+    tmp_app._provider = StreamingProvider()
+    sid = client.post("/api/sessions").json()["id"]
+    r = client.post("/api/chat", json={"message": "你好", "session_id": sid, "allow_fetch": False})
+    events = _parse_sse(r.text)
+    tokens = [e["content"] for e in events if e["type"] == "token"]
+    assert tokens == ["你", "好"]
+    msgs = client.get(f"/api/sessions/{sid}/messages").json()["messages"]
+    assert msgs[-1]["content"] == "你好"
+    client.delete(f"/api/sessions/{sid}")

@@ -63,6 +63,24 @@ def _tools_schema(allow_fetch: bool) -> list:
     return [t for t in TOOLS_SCHEMA if t["function"]["name"] != "fetch_url"]
 
 
+
+def _stream_chat(provider: BaseProvider, messages: list, tools: list):
+    """统一流式入口：Provider 未实现 chat_stream 时降级为一次性 chat。"""
+    stream = getattr(provider, "chat_stream", None)
+    if callable(stream):
+        yield from stream(messages, tools=tools)
+        return
+    resp = provider.chat(messages, tools=tools)
+    if resp.content:
+        yield {"type": "token", "content": resp.content}
+    yield {
+        "type": "done",
+        "content": resp.content,
+        "tool_calls": resp.tool_calls,
+        "reasoning": resp.reasoning,
+    }
+
+
 def run_agent(
     provider: BaseProvider,
     executor: ToolExecutor,
@@ -111,23 +129,50 @@ def run_agent(
             messages.append({"role": "tool", "tool_call_id": call_id, "content": result})
 
         for _ in range(config.MAX_TOOL_ROUNDS):
-            resp = provider.chat(messages, tools=tools)
+            content_parts: list[str] = []
+            reasoning_parts: list[str] = []
+            tool_calls: list = []
+            stream_done = False
 
-            if resp.tool_calls:
+            # 正文边生成边推送；tool_calls / draft_plan 的 JSON 参数仍等流结束再处理
+            for chunk in _stream_chat(provider, messages, tools):
+                if chunk.get("type") == "token":
+                    text = chunk.get("content") or ""
+                    if text:
+                        content_parts.append(text)
+                        yield {"type": "token", "content": text}
+                elif chunk.get("type") == "done":
+                    stream_done = True
+                    # 兼容不逐 token 的 Provider：整段内容在 done 里一次给出
+                    done_content = chunk.get("content") or ""
+                    if done_content and not content_parts:
+                        content_parts.append(done_content)
+                        yield {"type": "token", "content": done_content}
+                    if chunk.get("reasoning"):
+                        reasoning_parts.append(chunk["reasoning"])
+                    tool_calls = chunk.get("tool_calls") or []
+
+            if not stream_done:
+                raise RuntimeError("模型流异常结束，未收到 done 事件")
+
+            content = "".join(content_parts)
+            reasoning = "".join(reasoning_parts)
+
+            if tool_calls:
                 assistant_msg = {
                     "role": "assistant",
-                    "content": None,
+                    "content": content or None,
                     "tool_calls": [
                         {"id": tc["id"], "type": "function",
                          "function": {"name": tc["name"], "arguments": json.dumps(tc["arguments"], ensure_ascii=False)}}
-                        for tc in resp.tool_calls
+                        for tc in tool_calls
                     ],
                 }
                 # 思考型模型（DeepSeek reasoner/flash）要求工具调用轮次间回传思考过程
-                if getattr(resp, "reasoning", ""):
-                    assistant_msg["reasoning_content"] = resp.reasoning
+                if reasoning:
+                    assistant_msg["reasoning_content"] = reasoning
                 messages.append(assistant_msg)
-                for tc in resp.tool_calls:
+                for tc in tool_calls:
                     yield {"type": "tool_call", "name": tc["name"], "arguments": tc["arguments"]}
                     if tc["name"] == "draft_plan":
                         # 方案工具不落盘执行，只做规范化校验并抛出 plan 事件，
@@ -151,8 +196,6 @@ def run_agent(
                     messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
                 continue  # 工具结果回填后继续生成
 
-            if resp.content:
-                yield {"type": "token", "content": resp.content}
             yield {"type": "done"}
             return
 
