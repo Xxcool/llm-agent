@@ -84,9 +84,9 @@ export function TaskBoard({
         <ol className="task-list">
           {tasks.map((t, i) => (
             <li key={t.id} className={`task-item ${t.status}`}>
-              <span className="task-index">{i + 1}</span>
               <div className="task-body">
                 <div className="task-row">
+                  <span className="task-index">{i + 1}</span>
                   <span className="task-item-title">{t.title}</span>
                   <span className={`task-status ${t.status}`}>{STATUS_LABEL[t.status]}</span>
                   <button

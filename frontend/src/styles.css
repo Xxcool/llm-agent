@@ -1060,17 +1060,19 @@ body {
 }
 .task-hint { font-size: 11.5px; color: var(--text-dim); }
 .task-error { font-size: 12.5px; color: var(--err); margin: 8px 0 0; }
-.task-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.task-item { display: flex; gap: 10px; align-items: flex-start; }
+.task-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.task-item { display: block; }
+/* 序号与标题在同一条 flex 行内，保证垂直居中对齐 */
+.task-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .task-index {
-  flex-shrink: 0; width: 20px; height: 20px; margin-top: 1px;
+  flex-shrink: 0; width: 22px; height: 22px;
   border-radius: 6px; background: #eef1f8; color: #4c5a7a;
   font-size: 11.5px; display: grid; place-items: center;
+  font-variant-numeric: tabular-nums;
 }
 .task-item.done .task-index { background: #eafaf1; color: #157347; }
-.task-body { flex: 1; min-width: 0; }
-.task-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.task-item-title { font-size: 13.5px; color: var(--text); font-weight: 500; }
+.task-body { min-width: 0; }
+.task-item-title { font-size: 13.5px; color: var(--text); font-weight: 500; line-height: 22px; }
 .task-status {
   font-size: 11px; padding: 1px 8px; border-radius: 999px;
   border: 1px solid #e3e8f4; color: var(--text-dim); background: #fff;
@@ -1079,9 +1081,10 @@ body {
 .task-status.running { color: #a15c00; border-color: #f6e3c8; background: #fdf3e7; }
 .task-status.failed { color: #c53030; border-color: #f5c6c8; background: #fdecec; }
 .task-run { margin-left: auto; }
-.task-detail { font-size: 12.5px; color: var(--text-dim); margin: 5px 0 0; line-height: 1.6; }
-.task-output { font-size: 12px; color: #4c5a7a; margin: 3px 0 0; }
-.task-artifact { margin-top: 8px; }
+/* 详情与标题左对齐（序号 22 + 间距 9 = 31px） */
+.task-detail { font-size: 12.5px; color: var(--text-dim); margin: 6px 0 0 31px; line-height: 1.6; }
+.task-output { font-size: 12px; color: #4c5a7a; margin: 3px 0 0 31px; }
+.task-artifact { margin: 8px 0 0 31px; }
 .task-artifact-toggle {
   display: inline-flex; align-items: center; gap: 5px;
   border: none; background: none; cursor: pointer; padding: 0;
