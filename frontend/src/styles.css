@@ -118,6 +118,8 @@ body {
 .status-chip.ok .dot { background: var(--ok); }
 .status-chip.demo { color: var(--warn); }
 .status-chip.demo .dot { background: var(--warn); }
+.status-chip.error { color: #e5484d; }
+.status-chip.error .dot { background: #e5484d; }
 
 /* ---------- hero（首页） ---------- */
 .hero {

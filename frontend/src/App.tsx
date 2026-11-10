@@ -124,9 +124,12 @@ export default function App() {
                 <h1>LLM Agent 智能对话平台</h1>
               </button>
               <div className="header-actions">
-                <span className={`status-chip ${isDemo ? 'demo' : 'ok'}`}>
+                <span className={`status-chip ${healthState}`} title={health?.ok === false ? health.error : undefined}>
                   <span className="dot" />
-                  {health ? (isDemo ? '演示模式' : '已接入') : '未连接'}
+                  {healthState === 'down' ? '未连接'
+                    : healthState === 'demo' ? '演示模式'
+                    : healthState === 'error' ? '模型服务异常'
+                    : '已接入'}
                 </span>
                 <button className="icon-btn" title="知识库管理" onClick={() => setShowKnowledge(true)}>
                   <IconBook size={15} />
