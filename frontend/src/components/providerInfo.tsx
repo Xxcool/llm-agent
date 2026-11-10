@@ -19,7 +19,7 @@ export interface ProviderPreset {
 
 /** 服务商预设：品牌 logo + 一键填充地址，models 供下拉选择 */
 export const PROVIDER_PRESETS: ProviderPreset[] = [
-  { name: 'DeepSeek', base_url: 'https://api.deepseek.com', color: '#4D6BFE', models: ['deepseek-chat', 'deepseek-reasoner'] },
+  { name: 'DeepSeek', base_url: 'https://api.deepseek.com', color: '#4D6BFE', models: ['deepseek-flash', 'deepseek-v4-pro'] },
   { name: '智谱 GLM', base_url: 'https://open.bigmodel.cn/api/paas/v4', color: '#2454FF', models: ['glm-4-flash', 'glm-4-plus', 'glm-4.5', 'glm-4.5-air'] },
   { name: '通义千问', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', color: '#615CED', models: ['qwen-plus', 'qwen-turbo', 'qwen-max'] },
   { name: 'Moonshot', base_url: 'https://api.moonshot.cn/v1', color: '#1E1E1E', models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'] },
