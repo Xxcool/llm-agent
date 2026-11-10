@@ -17,3 +17,5 @@ backend/data/
 .env.local
 .DS_Store
 *.tsbuildinfo
+backend/knowledge/uploads/
+backend/data/runtime_config.json

@@ -59,3 +59,72 @@ export async function fetchHealth(): Promise<HealthInfo> {
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return (await resp.json()) as HealthInfo
 }
+
+// ---------- 平台配置（接入 LLM 服务商） ----------
+
+export interface PlatformConfig {
+  provider: string
+  base_url: string
+  model: string
+  has_key: boolean
+}
+
+export async function fetchConfig(): Promise<PlatformConfig> {
+  const resp = await fetch('/api/config')
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return (await resp.json()) as PlatformConfig
+}
+
+export async function saveConfig(cfg: {
+  base_url?: string
+  api_key?: string
+  model?: string
+}): Promise<{ status: string; provider: string }> {
+  const resp = await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg),
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return (await resp.json()) as { status: string; provider: string }
+}
+
+// ---------- 知识库管理 ----------
+
+export interface KnowledgeDoc {
+  source: string
+  chunks: number
+}
+
+export async function listKnowledge(): Promise<KnowledgeDoc[]> {
+  const resp = await fetch('/api/knowledge')
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = (await resp.json()) as { docs: KnowledgeDoc[] }
+  return data.docs
+}
+
+export async function addKnowledgeText(name: string, text: string): Promise<void> {
+  const resp = await fetch('/api/knowledge/text', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, text }),
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+}
+
+export async function uploadKnowledgeFile(file: File): Promise<void> {
+  const form = new FormData()
+  form.append('file', file)
+  const resp = await fetch('/api/knowledge/upload', { method: 'POST', body: form })
+  if (!resp.ok) {
+    const detail = await resp.json().catch(() => null) as { detail?: string } | null
+    throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
+  }
+}
+
+export async function deleteKnowledge(source: string): Promise<void> {
+  const resp = await fetch(`/api/knowledge?source=${encodeURIComponent(source)}`, {
+    method: 'DELETE',
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+}

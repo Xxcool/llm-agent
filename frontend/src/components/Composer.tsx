@@ -5,10 +5,14 @@ export function Composer({
   disabled,
   onSend,
   onStop,
+  hero = false,
+  autoFocusInput = false,
 }: {
   disabled: boolean
   onSend: (text: string) => void
   onStop: () => void
+  hero?: boolean
+  autoFocusInput?: boolean
 }) {
   const [text, setText] = useState('')
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -22,6 +26,10 @@ export function Composer({
     }
   }, [text])
 
+  useEffect(() => {
+    if (autoFocusInput) taRef.current?.focus()
+  }, [autoFocusInput])
+
   const submit = () => {
     if (!text.trim() || disabled) return
     onSend(text)
@@ -29,12 +37,12 @@ export function Composer({
   }
 
   return (
-    <footer className="composer">
+    <footer className={`composer ${hero ? 'hero-composer-inner' : ''}`}>
       <div className="composer-box">
         <textarea
           ref={taRef}
           value={text}
-          placeholder={disabled ? 'Agent 思考中…' : '输入问题，Enter 发送 / Shift+Enter 换行'}
+          placeholder={disabled ? 'Agent 思考中…' : '问点什么…'}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -42,19 +50,25 @@ export function Composer({
               submit()
             }
           }}
-          rows={1}
+          rows={hero ? 2 : 1}
         />
-        {disabled ? (
-          <button className="send stop" onClick={onStop} title="停止生成">
-            ■
-          </button>
-        ) : (
-          <button className="send" onClick={submit} disabled={!text.trim()}>
-            ➤
-          </button>
-        )}
+        <div className="composer-bar">
+          <div className="composer-chips">
+            <span className="chip">🔍 知识检索</span>
+            <span className="chip">🌐 网页抓取</span>
+          </div>
+          {disabled ? (
+            <button className="send stop" onClick={onStop} title="停止生成">
+              ■
+            </button>
+          ) : (
+            <button className="send" onClick={submit} disabled={!text.trim()} title="发送">
+              ↑
+            </button>
+          )}
+        </div>
       </div>
-      <p className="composer-hint">回答基于 RAG 检索与工具调用结果生成，请注意甄别</p>
+      {!hero && <p className="composer-hint">回答基于 RAG 检索与工具调用结果生成，请注意甄别</p>}
     </footer>
   )
 }

@@ -1,5 +1,6 @@
 """RAG：文档分块入库（SQLite）+ 向量相似度检索。"""
 import sqlite3
+import threading
 from pathlib import Path
 from typing import List, Tuple
 
@@ -32,7 +33,9 @@ class RagStore:
     def __init__(self, db_path: Path = None):
         self.db_path = Path(db_path or config.DB_PATH)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(self.db_path)
+        # FastAPI 同步/异步端点可能在不同线程访问，check_same_thread=False + 写锁
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self._lock = threading.Lock()
         self.conn.execute(
             "CREATE TABLE IF NOT EXISTS chunks ("
             "id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, seq INTEGER, text TEXT, vec TEXT)"
@@ -43,28 +46,43 @@ class RagStore:
         """目录（含子目录）下所有 .md/.txt 入库（按相对路径+mtime 增量跳过未变更文件）。"""
         n = 0
         root = Path(docs_dir)
-        for f in sorted(root.rglob("*")):
-            if not f.is_file() or f.suffix.lower() not in (".md", ".txt"):
-                continue
-            rel = f.relative_to(root)
-            sig = f"{rel}:{f.stat().st_mtime_ns}"
-            row = self.conn.execute(
-                "SELECT COUNT(*) FROM chunks WHERE source=?", (sig,)
-            ).fetchone()[0]
-            if row:
-                continue
-            self.conn.execute("DELETE FROM chunks WHERE source LIKE ?", (f"{rel}:%",))
-            text = f.read_text(encoding="utf-8")
-            chunks = _chunks(text)
-            vecs = self.embedder.embed(chunks)
-            for i, (c, v) in enumerate(zip(chunks, vecs)):
-                self.conn.execute(
-                    "INSERT INTO chunks (source, seq, text, vec) VALUES (?,?,?,?)",
-                    (sig, i, c, ",".join(f"{x:.6f}" for x in v)),
-                )
-            n += len(chunks)
-        self.conn.commit()
+        with self._lock:
+            for f in sorted(root.rglob("*")):
+                if not f.is_file() or f.suffix.lower() not in (".md", ".txt"):
+                    continue
+                rel = f.relative_to(root)
+                sig = f"{rel}:{f.stat().st_mtime_ns}"
+                row = self.conn.execute(
+                    "SELECT COUNT(*) FROM chunks WHERE source=?", (sig,)
+                ).fetchone()[0]
+                if row:
+                    continue
+                self.conn.execute("DELETE FROM chunks WHERE source LIKE ?", (f"{rel}:%",))
+                text = f.read_text(encoding="utf-8")
+                chunks = _chunks(text)
+                vecs = self.embedder.embed(chunks)
+                for i, (c, v) in enumerate(zip(chunks, vecs)):
+                    self.conn.execute(
+                        "INSERT INTO chunks (source, seq, text, vec) VALUES (?,?,?,?)",
+                        (sig, i, c, ",".join(f"{x:.6f}" for x in v)),
+                    )
+                n += len(chunks)
+            self.conn.commit()
         return n
+
+    def sources(self) -> List[Tuple[str, int]]:
+        """已入库文档列表：[(相对路径, 分块数)]。"""
+        rows = self.conn.execute(
+            "SELECT source, COUNT(*) FROM chunks GROUP BY source ORDER BY source"
+        ).fetchall()
+        return [(s.split(":")[0], int(c)) for s, c in rows]
+
+    def delete_source(self, rel: str) -> int:
+        """删除某文档的全部分块，返回删除数。"""
+        with self._lock:
+            cur = self.conn.execute("DELETE FROM chunks WHERE source LIKE ?", (f"{rel}:%",))
+            self.conn.commit()
+        return cur.rowcount
 
     def search(self, query: str, top_k: int = None) -> List[Tuple[str, str, float]]:
         top_k = top_k or config.TOP_K
