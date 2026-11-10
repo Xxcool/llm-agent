@@ -128,6 +128,30 @@ def set_config(body: ConfigIn):
     return {"status": "ok", "provider": _provider.name}
 
 
+class ConfigTestIn(BaseModel):
+    base_url: str
+    model: str
+    api_key: Optional[str] = None
+
+
+@app.post("/api/config/test")
+def test_config(body: ConfigTestIn):
+    """真实调用一次模型验证接入可用性（不落盘），返回可读的成功/失败结果。"""
+    rt = _load_runtime()
+    key = (body.api_key or "").strip() or rt.get("api_key") or config.LLM_API_KEY
+    if not key:
+        return {"ok": False, "error": "未填写 API Key"}
+    provider = OpenAICompatProvider(body.base_url, key, body.model)
+    try:
+        resp = provider.chat([{"role": "user", "content": "请只回复两个字：正常"}])
+        reply = (resp.content or "").strip()[:30]
+        return {"ok": True, "reply": reply or "（空回复）"}
+    except Exception as e:  # noqa: BLE001 把真实失败原因返回给前端
+        from .agent import _provider_error_message
+
+        return {"ok": False, "error": _provider_error_message(e)}
+
+
 # ---------- 知识库管理 ----------
 
 @app.get("/api/knowledge")
@@ -310,6 +334,7 @@ def chat(body: ChatIn):
     def gen():
         content_parts: list = []
         steps: list = []
+        error_text: str | None = None
         for event in run_agent(
             _provider, _executor, body.message,
             history=history,
@@ -325,8 +350,14 @@ def chat(body: ChatIn):
                     if s["name"] == event["name"] and "result" not in s:
                         s["result"] = event["content"]
                         break
+            elif event["type"] == "error":
+                error_text = event["message"]
             yield {"event": "message", "data": json.dumps(event, ensure_ascii=False)}
         if body.session_id:
-            store.add_message(body.session_id, "assistant", "".join(content_parts), steps)
+            text = "".join(content_parts)
+            # 生成失败时把错误持久化为消息内容，刷新后依然可见（而不是空白）
+            if error_text:
+                text = f"{text}\n\n⚠️ {error_text}".strip()
+            store.add_message(body.session_id, "assistant", text, steps)
 
     return EventSourceResponse(gen())

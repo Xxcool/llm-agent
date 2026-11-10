@@ -22,4 +22,6 @@ DB_PATH = Path(os.getenv("RAG_DB_PATH", ROOT / "data" / "rag.sqlite3"))
 # Agent
 MAX_TOOL_ROUNDS = int(os.getenv("MAX_TOOL_ROUNDS", "6"))
 TOP_K = int(os.getenv("RAG_TOP_K", "4"))
+# 检索相似度阈值：最高分低于该值视为「知识库未覆盖」，避免硬凑无关内容（实测相关 0.6+，无关 <0.52）
+SCORE_THRESHOLD = float(os.getenv("RAG_SCORE_THRESHOLD", "0.58"))
 FETCH_URL_TIMEOUT = float(os.getenv("FETCH_URL_TIMEOUT", "10"))

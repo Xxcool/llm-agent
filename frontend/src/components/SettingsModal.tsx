@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchConfig, saveConfig } from '../api'
+import { fetchConfig, saveConfig, testConfig } from '../api'
 import type { PlatformConfig } from '../api'
 import { IconX } from './icons'
 
@@ -30,8 +30,21 @@ export function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
         model,
       }
       if (apiKey.trim()) payload.api_key = apiKey.trim() // 留空 = 保留已存 Key
-      const r = await saveConfig(payload)
-      setMessage(r.provider === 'mock' ? '未填写 Key，当前仍为演示模式' : `已接入 ${r.provider}`)
+
+      // ① 真实调用一次模型验证可用性，失败则不保存
+      const t = await testConfig({
+        base_url: baseUrl,
+        model,
+        api_key: apiKey.trim() || undefined,
+      })
+      if (!t.ok) {
+        setMessage(`连接失败：${t.error}（配置未保存）`)
+        return
+      }
+
+      // ② 测试通过才保存
+      await saveConfig(payload)
+      setMessage(`连接成功，模型回复「${t.reply}」，已保存配置`)
       onSaved()
     } catch (e) {
       setMessage(`保存失败：${(e as Error).message}`)
@@ -77,7 +90,7 @@ export function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
         <div className="field-tips">
           <p>支持任意 OpenAI 兼容服务商，常用 API 地址：</p>
           <ul>
-            <li>DeepSeek：<code>https://api.deepseek.com</code>（模型 deepseek-chat）</li>
+            <li>DeepSeek：<code>https://api.deepseek.com</code>（模型 deepseek-chat / deepseek-reasoner）</li>
             <li>智谱 GLM：<code>https://open.bigmodel.cn/api/paas/v4</code></li>
             <li>Moonshot：<code>https://api.moonshot.cn/v1</code></li>
           </ul>

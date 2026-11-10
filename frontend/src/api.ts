@@ -99,6 +99,21 @@ export async function saveConfig(cfg: {
   return (await resp.json()) as { status: string; provider: string }
 }
 
+/** 真实调用一次模型验证接入配置（不落盘） */
+export async function testConfig(cfg: {
+  base_url: string
+  model: string
+  api_key?: string
+}): Promise<{ ok: boolean; reply?: string; error?: string }> {
+  const resp = await fetch('/api/config/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg),
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return (await resp.json()) as { ok: boolean; reply?: string; error?: string }
+}
+
 // ---------- 知识库管理 ----------
 
 export interface KnowledgeDoc {

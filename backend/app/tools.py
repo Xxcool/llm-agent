@@ -45,6 +45,9 @@ class ToolExecutor:
     def run(self, name: str, args: dict) -> str:
         if name == "search_knowledge":
             hits = self.rag.search(args["query"])
+            # 相似度阈值：最高分都达不到阈值说明知识库没覆盖该主题，
+            # 宁可如实说没有也不要硬凑不相关内容污染回答
+            hits = [h for h in hits if h[2] >= config.SCORE_THRESHOLD]
             if not hits:
                 return "知识库中没有相关内容。"
             return "\n---\n".join(f"[{src}] {text}" for src, text, _ in hits)

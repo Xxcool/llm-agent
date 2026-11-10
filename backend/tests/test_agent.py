@@ -15,7 +15,8 @@ def make_store(tmp_path):
     cfg = type("C", (), {**vars(config),
                          "DB_PATH": tmp_path / "test.sqlite3",
                          "KNOWLEDGE_DIR": tmp_path / "kb",
-                         "TOP_K": 3})()
+                         "TOP_K": 3,
+                         "SCORE_THRESHOLD": 0.0})()
     kb = tmp_path / "kb"
     kb.mkdir(parents=True)
     (kb / "team-intro.md").write_text(
@@ -40,7 +41,8 @@ def test_rag_search(tmp_path):
     assert any("智慧仓储" in t for _, t, _ in hits)
 
 
-def test_agent_loop_with_tools(tmp_path):
+def test_agent_loop_with_tools(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SCORE_THRESHOLD", 0.0)  # 关闭阈值，专注验证工具循环
     store, _ = make_store(tmp_path)
     executor = ToolExecutor(store)
     events = list(run_agent(MockProvider(), executor, "平台研发组做过哪些项目？"))
@@ -49,6 +51,15 @@ def test_agent_loop_with_tools(tmp_path):
     assert types[-1] == "done"
     answer = "".join(e["content"] for e in events if e["type"] == "token")
     assert "智慧仓储" in answer
+
+
+def test_search_threshold_rejects_unrelated(tmp_path, monkeypatch):
+    """相似度低于阈值时如实返回「没有相关内容」，而不是硬凑不相关片段。"""
+    monkeypatch.setattr(config, "SCORE_THRESHOLD", 0.99)  # 高阈值必然触发拒绝分支
+    store, _ = make_store(tmp_path)
+    executor = ToolExecutor(store)
+    result = executor.run("search_knowledge", {"query": "平台研发组做过哪些项目"})
+    assert result == "知识库中没有相关内容。"
 
 
 def test_tool_unknown(tmp_path):
