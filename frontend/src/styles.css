@@ -692,14 +692,20 @@ body {
 .code-act.ok { color: #16a34a; }
 /* 表格（横向滚动 + 复制栏） */
 .md-table-wrap {
-  margin: 12px 0; border: 1px solid #e8eaf0; border-radius: 12px;
-  overflow: hidden; background: #fff;
+  position: relative;
+  margin: 14px 0 16px;
 }
-.md-table-bar {
-  display: flex; justify-content: flex-end;
-  padding: 5px 8px;
-  background: #f2f4f8; border-bottom: 1px solid #e8eaf0;
+/* 复制按钮：悬停浮现的小图标，不占版式（DeepSeek 式极简表格） */
+.md-table-copy {
+  position: absolute; top: -10px; right: -2px; z-index: 2;
+  width: 26px; height: 26px; border-radius: 7px; border: none;
+  background: rgba(255, 255, 255, 0.92); color: #9aa3b5; cursor: pointer;
+  display: grid; place-items: center;
+  opacity: 0; transition: opacity 0.15s, color 0.15s;
 }
+.md-table-wrap:hover .md-table-copy { opacity: 1; }
+.md-table-copy:hover { color: var(--accent); }
+.md-table-copy.ok { color: #157347; }
 .md-table-scroll { overflow-x: auto; }
 .md-table-scroll table { margin: 0; width: 100%; }
 .md-table-scroll th, .md-table-scroll td { white-space: nowrap; }
@@ -900,9 +906,24 @@ body {
   padding: 14px; overflow-x: auto; margin: 10px 0;
 }
 .bubble-md pre code { background: none; border: none; padding: 0; color: var(--text); }
-.bubble-md table { border-collapse: collapse; margin: 10px 0; width: 100%; }
-.bubble-md th, .bubble-md td { border: 1px solid var(--border-strong); padding: 7px 12px; font-size: 13px; }
-.bubble-md th { background: var(--bg-soft); }
+/* 表格：DeepSeek 式极简——无外框、无竖线、无斑马纹，只保留横向分隔线 */
+.bubble-md table { border-collapse: collapse; margin: 0; width: 100%; }
+.bubble-md th, .bubble-md td {
+  border: none;
+  border-bottom: 1px solid #eef0f4;
+  padding: 11px 16px;
+  font-size: 14px;
+  text-align: left;
+  vertical-align: top;
+}
+.bubble-md th {
+  background: none;
+  font-weight: 500;
+  color: var(--text);
+  border-bottom-color: #e4e7ee;
+  white-space: nowrap;
+}
+.bubble-md tr:last-child td { border-bottom: none; }
 .bubble-md blockquote {
   border-left: 3px solid var(--accent); padding: 2px 0 2px 14px;
   color: var(--text-dim); margin: 10px 0;

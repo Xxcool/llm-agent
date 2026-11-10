@@ -185,12 +185,14 @@ function TableBlock({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="md-table-wrap">
-      <div className="md-table-bar">
-        <button className={`code-act ${copied ? 'ok' : ''}`} onClick={copyCsv}>
-          {copied ? <IconCheck size={12} /> : <IconCopy size={13} />}
-          {copied ? '已复制' : '复制表格'}
-        </button>
-      </div>
+      <button
+        className={`md-table-copy ${copied ? 'ok' : ''}`}
+        onClick={copyCsv}
+        title={copied ? '已复制' : '复制表格（CSV）'}
+        aria-label={copied ? '已复制' : '复制表格'}
+      >
+        {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
+      </button>
       <div className="md-table-scroll">
         <table ref={tableRef}>{children}</table>
       </div>
