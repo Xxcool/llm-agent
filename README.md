@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-83%20passed-3fb950)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-84%20passed-3fb950)](.github/workflows/ci.yml)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
 
@@ -48,7 +48,7 @@
 | **富文本渲染** | 代码块（高亮/复制/下载）、表格（复制 CSV）、mermaid 流程图、LaTeX 公式、图片/音视频/文件卡片 |
 | **消息操作** | 复制 / 重新生成 / 朗读（Edge 神经语音 + 播放声波动画）/ 点赞点踩（原因面板，持久化） |
 | **会话管理** | 搜索、置顶、重命名、多选批量操作、空会话不进入历史列表（前端首条消息时才创建） |
-| **测试体系** | 66 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 17 个前端用例 + 真实链路端到端验证脚本 |
+| **测试体系** | 67 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 17 个前端用例 + 真实链路端到端验证脚本 |
 
 ## 架构
 
@@ -220,7 +220,7 @@ LLM_MODEL=deepseek-flash
 GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest 与前端 vitest + 构建。
 
 ```bash
-cd backend && .venv/bin/python -m pytest tests -q   # 后端 66 用例
+cd backend && .venv/bin/python -m pytest tests -q   # 后端 67 用例
 cd frontend && npm test                             # 前端 17 用例
 ```
 
@@ -239,7 +239,7 @@ cd frontend && npm test                             # 前端 17 用例
 | `test_store.py` | 8 | 会话增删改查、置顶排序、标题自动生成、空会话过滤、反馈持久化、历史顺序 |
 | `test_llm.py` | 15 | MockProvider 行为、错误码映射、思考模型 `reasoning_content`、流式 token/tool_calls 分片/reasoning/非法 JSON、Agent 增量 token |
 | `test_rag.py` | 5 | 入库增量、已删文件脏块清理、delete_source、LIKE 通配符转义 |
-| `test_agent.py` | 8 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验、SSRF 内网/重定向拦截 |
+| `test_agent.py` | 9 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验、SSRF 内网/重定向拦截、方案依据来源校验 |
 | `test_plans.py` | 7 | 方案规范化与校验、多候选 SSE、选择互斥、单方案兼容、非法参数容错 |
 | `test_tasks.py` | 7 | 任务拆解与幂等、未确认方案拦截、文档交付、代码 diff 审批与落盘校验、绝对路径/穿越防护、任务状态守卫、文件数上限 |
 | `test_api.py` | 16 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路/多 token 事件、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式、API Token/CORS |

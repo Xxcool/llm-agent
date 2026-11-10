@@ -1,5 +1,6 @@
 """Agent 循环：意图判断 → 工具执行 → 结果回填 → 继续生成，产出 SSE 事件流。"""
 import json
+import re
 from typing import Generator, List, Optional
 
 import httpx
@@ -64,6 +65,15 @@ def _tools_schema(allow_fetch: bool) -> list:
 
 
 
+
+_SEARCH_SOURCE_RE = re.compile(r"^\[([^\]]+)\]", re.MULTILINE)
+
+
+def _sources_from_search_result(result: str) -> set[str]:
+    """从 search_knowledge 的格式化结果中提取来源，用于校验方案依据。"""
+    return set(_SEARCH_SOURCE_RE.findall(result or ""))
+
+
 def _stream_chat(provider: BaseProvider, messages: list, tools: list):
     """统一流式入口：Provider 未实现 chat_stream 时降级为一次性 chat。"""
     stream = getattr(provider, "chat_stream", None)
@@ -104,6 +114,7 @@ def run_agent(
     messages.extend(history or [])
     messages.append({"role": "user", "content": user_message})
     tools = _tools_schema(allow_fetch)
+    retrieved_sources: set[str] = set()
 
     try:
         if force_retrieval or plan_mode:
@@ -113,6 +124,7 @@ def run_agent(
             except Exception as e:  # noqa: BLE001
                 result = f"检索失败：{e.__class__.__name__}: {e}"
             yield {"type": "tool_result", "name": "search_knowledge", "content": result}
+            retrieved_sources.update(_sources_from_search_result(result))
             # 以标准 assistant(tool_calls)+tool 消息形式回填，兼容 OpenAI 协议；
             # 思考型模型（DeepSeek flash/reasoner）要求该字段存在，空串即可
             call_id = "forced_search_1"
@@ -179,6 +191,15 @@ def run_agent(
                         # 由上层持久化到消息上、前端渲染为可确认的方案卡片
                         try:
                             plan = normalize_plan(tc["arguments"])
+                            if retrieved_sources:
+                                invalid = [
+                                    e["source"] for e in plan["evidence"]
+                                    if e.get("source") and e["source"] not in retrieved_sources
+                                ]
+                                if invalid:
+                                    raise ValueError(
+                                        "依据来源不在本轮检索结果中：" + "、".join(invalid[:3])
+                                    )
                             yield {"type": "plan", "plan": plan}
                             result = (
                                 f"方案已生成并展示给用户：{plan['title']}"
@@ -192,6 +213,8 @@ def run_agent(
                             result = executor.run(tc["name"], tc["arguments"])
                         except Exception as e:  # noqa: BLE001 工具失败不中断对话
                             result = f"工具执行失败：{e.__class__.__name__}: {e}"
+                        if tc["name"] == "search_knowledge":
+                            retrieved_sources.update(_sources_from_search_result(result))
                     yield {"type": "tool_result", "name": tc["name"], "content": result}
                     messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
                 continue  # 工具结果回填后继续生成

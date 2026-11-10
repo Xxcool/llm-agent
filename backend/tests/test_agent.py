@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import config  # noqa: E402
 from app.agent import run_agent  # noqa: E402
-from app.llm import MockProvider  # noqa: E402
+from app.llm import BaseProvider, ChatResponse, MockProvider  # noqa: E402
 from app.rag import RagStore  # noqa: E402
 from app.tools import ToolExecutor, fetch_text, validate_public_url  # noqa: E402
 
@@ -114,3 +114,48 @@ def test_fetch_text_rejects_redirect_to_private(monkeypatch):
     with pytest.raises(ValueError, match="内网"):
         fetch_text("http://93.184.216.34/")
     assert calls == ["http://93.184.216.34/"]
+
+
+def test_plan_evidence_source_must_come_from_retrieval(tmp_path, monkeypatch):
+    """检索命中后，方案依据必须引用本轮真实来源，不能编造文件名。"""
+    from app.rag import RagStore
+    from app.embedder import HashEmbedder
+
+    monkeypatch.setattr(config, "SCORE_THRESHOLD", 0.0)
+    kb = tmp_path / "kb"
+    kb.mkdir()
+    (kb / "team.md").write_text("研发团队负责统一身份认证平台。", encoding="utf-8")
+    rag = RagStore(tmp_path / "rag.sqlite3")
+    rag.embedder = HashEmbedder()
+    rag.ingest_dir(kb)
+    executor = ToolExecutor(rag)
+
+    class BadEvidenceProvider(BaseProvider):
+        name = "bad-evidence"
+
+        def __init__(self):
+            self.round = 0
+
+        def chat(self, messages, tools=None):
+            self.round += 1
+            if self.round == 1:
+                return ChatResponse(tool_calls=[{
+                    "id": "s1", "name": "search_knowledge",
+                    "arguments": {"query": "研发团队"},
+                }])
+            if self.round == 2:
+                return ChatResponse(tool_calls=[{
+                    "id": "p1", "name": "draft_plan",
+                    "arguments": {
+                        "title": "团队建设方案",
+                        "steps": [{"title": "梳理职责"}],
+                        "evidence": [{"source": "不存在.md", "quote": "编造"}],
+                    },
+                }])
+            return ChatResponse(content="已修正。")
+
+    events = list(run_agent(BadEvidenceProvider(), executor, "研发团队方案", allow_fetch=False))
+    assert not [e for e in events if e["type"] == "plan"]
+    assert any("依据来源不在本轮检索结果中" in (e.get("content") or "")
+               for e in events if e["type"] == "tool_result")
+    assert events[-1]["type"] == "done"
