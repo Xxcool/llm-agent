@@ -229,6 +229,24 @@ export default function App() {
               📚 管理知识库{health ? `（${health.chunks} 块）` : ''}
             </button>
           </div>
+
+          <section className="hero-features">
+            <div className="feature-card">
+              <div className="feature-icon">🔍</div>
+              <h3>RAG 检索增强</h3>
+              <p>文档自动分块向量化，回答前检索最相关的知识片段，并标注来源文件</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">🛠</div>
+              <h3>Function Calling</h3>
+              <p>Agent 自主调用知识检索、简历查询、网页抓取三类工具，多轮闭环完成任务</p>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon">⚡</div>
+              <h3>SSE 流式输出</h3>
+              <p>Fetch Stream 逐字呈现回答，工具调用过程以时间线实时可视化</p>
+            </div>
+          </section>
         </main>
       )}
 

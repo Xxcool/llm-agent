@@ -67,11 +67,16 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 7px 12px 7px 14px; border-radius: 16px;
   border: 1px solid transparent; background: transparent;
-  transition: background 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease,
+  transition:
+    max-width 0.38s cubic-bezier(0.22, 0.75, 0.3, 1),
+    padding 0.38s cubic-bezier(0.22, 0.75, 0.3, 1),
+    background 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease,
     backdrop-filter 0.28s ease;
   pointer-events: auto;
 }
 .nav-pill.glass {
+  max-width: 980px; /* 滚动后向内收缩，DeepSeek 同款 */
+  padding: 7px 6px 7px 16px;
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(18px) saturate(1.7);
@@ -112,8 +117,8 @@ body {
 .hero {
   position: relative; z-index: 10;
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: 108px 24px 40px; gap: 12px;
+  align-items: center; justify-content: flex-start;
+  padding: clamp(104px, 14vh, 156px) 24px 40px; gap: 12px;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -135,6 +140,27 @@ body {
 .quick-chip:hover {
   border-color: var(--accent); background: #fff;
   box-shadow: 0 4px 14px rgba(31, 45, 80, 0.08);
+}
+
+/* 首页下方功能区（提供滚动内容，配合导航收缩效果） */
+.hero-features {
+  width: min(980px, 92vw);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  margin-top: 84px; padding-bottom: 48px;
+}
+.feature-card {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 16px; padding: 20px;
+  box-shadow: 0 6px 24px rgba(31, 45, 80, 0.06);
+}
+.feature-icon { font-size: 20px; margin-bottom: 8px; }
+.feature-card h3 { font-size: 14.5px; font-weight: 600; margin-bottom: 6px; }
+.feature-card p { font-size: 13px; color: #5a6478; line-height: 1.65; }
+@media (max-width: 760px) {
+  .hero-features { grid-template-columns: 1fr; }
 }
 
 /* 入场动画：从下往上 */
