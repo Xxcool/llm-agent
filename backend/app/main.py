@@ -15,6 +15,7 @@ from . import config
 from .agent import run_agent
 from .llm import BaseProvider, MockProvider, OpenAICompatProvider
 from .rag import RagStore
+from .store import ChatStore
 from .tools import ToolExecutor, fetch_text
 
 app = FastAPI(title="LLM Agent 智能对话平台", version="0.2.0")
@@ -32,6 +33,7 @@ RUNTIME_FILE = Path(config.DB_PATH).parent / "runtime_config.json"
 _rag: Optional[RagStore] = None
 _executor: Optional[ToolExecutor] = None
 _provider: Optional[BaseProvider] = None
+_store: Optional[ChatStore] = None
 
 
 def _load_runtime() -> dict:
@@ -72,6 +74,7 @@ def _ensure_state() -> RagStore:
 
 class ChatIn(BaseModel):
     message: str
+    session_id: Optional[str] = None  # 提供则持久化并携带多轮上下文
     force_retrieval: bool = False  # 前端「知识检索」开关
     allow_fetch: bool = True  # 前端「网页抓取」开关
 
@@ -217,18 +220,68 @@ def delete_knowledge(source: str):
     return {"status": "ok", "removed_chunks": removed}
 
 
+# ---------- 会话管理 ----------
+
+def _ensure_store() -> ChatStore:
+    global _store
+    if _store is None:
+        _store = ChatStore()
+    return _store
+
+
+@app.post("/api/sessions")
+def create_session():
+    return _ensure_store().create_session()
+
+
+@app.get("/api/sessions")
+def list_sessions():
+    return {"sessions": _ensure_store().list_sessions()}
+
+
+@app.get("/api/sessions/{sid}/messages")
+def get_session_messages(sid: str):
+    return {"messages": _ensure_store().get_messages(sid)}
+
+
+@app.delete("/api/sessions/{sid}")
+def delete_session(sid: str):
+    _ensure_store().delete_session(sid)
+    return {"status": "ok"}
+
+
 # ---------- 对话 ----------
 
 @app.post("/api/chat")
 def chat(body: ChatIn):
     _ensure_state()
+    store = _ensure_store()
+    history: list = []
+
+    if body.session_id:
+        store.add_message(body.session_id, "user", body.message)
+        history = store.history(body.session_id)
 
     def gen():
+        content_parts: list = []
+        steps: list = []
         for event in run_agent(
             _provider, _executor, body.message,
+            history=history,
             force_retrieval=body.force_retrieval,
             allow_fetch=body.allow_fetch,
         ):
+            if event["type"] == "token":
+                content_parts.append(event["content"])
+            elif event["type"] == "tool_call":
+                steps.append({"name": event["name"], "arguments": event["arguments"]})
+            elif event["type"] == "tool_result" and steps:
+                for s in reversed(steps):
+                    if s["name"] == event["name"] and "result" not in s:
+                        s["result"] = event["content"]
+                        break
             yield {"event": "message", "data": json.dumps(event, ensure_ascii=False)}
+        if body.session_id:
+            store.add_message(body.session_id, "assistant", "".join(content_parts), steps)
 
     return EventSourceResponse(gen())

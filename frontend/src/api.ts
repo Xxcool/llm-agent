@@ -1,4 +1,5 @@
 import type { AgentEvent, HealthInfo } from './types'
+import type { ToolStep } from './types'
 
 /**
  * 解析 SSE 文本缓冲区，按 "data: {...}" 行切分事件。
@@ -28,6 +29,7 @@ export interface ChatOptions {
 
 export async function streamChat(
   message: string,
+  sessionId: string | null,
   options: ChatOptions,
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
@@ -35,7 +37,7 @@ export async function streamChat(
   const resp = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, ...options }),
+    body: JSON.stringify({ message, session_id: sessionId, ...options }),
     signal,
   })
   if (!resp.ok || !resp.body) {
@@ -159,4 +161,44 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 /** 批量导入网页链接（如外部文档、规章制度页面） */
 export async function importUrls(urls: string[]): Promise<ImportResult> {
   return postJson<ImportResult>('/api/knowledge/url', { urls })
+}
+
+// ---------- 会话管理 ----------
+
+export interface SessionInfo {
+  id: string
+  title: string
+  updated_at: string
+}
+
+export interface StoredMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  steps: ToolStep[]
+}
+
+export async function createSession(): Promise<SessionInfo> {
+  const resp = await fetch('/api/sessions', { method: 'POST' })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return (await resp.json()) as SessionInfo
+}
+
+export async function listSessions(): Promise<SessionInfo[]> {
+  const resp = await fetch('/api/sessions')
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = (await resp.json()) as { sessions: SessionInfo[] }
+  return data.sessions
+}
+
+export async function deleteSession(id: string): Promise<void> {
+  const resp = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+}
+
+export async function getSessionMessages(id: string): Promise<StoredMessage[]> {
+  const resp = await fetch(`/api/sessions/${id}/messages`)
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = (await resp.json()) as { messages: StoredMessage[] }
+  return data.messages
 }

@@ -1,6 +1,6 @@
 """Agent 循环：意图判断 → 工具执行 → 结果回填 → 继续生成，产出 SSE 事件流。"""
 import json
-from typing import Generator
+from typing import Generator, List, Optional
 
 from . import config
 from .llm import BaseProvider
@@ -27,6 +27,7 @@ def run_agent(
     provider: BaseProvider,
     executor: ToolExecutor,
     user_message: str,
+    history: Optional[List[dict]] = None,
     force_retrieval: bool = False,
     allow_fetch: bool = True,
 ) -> Generator[dict, None, None]:
@@ -34,13 +35,13 @@ def run_agent(
     {"type":"tool_call","name","arguments"} / {"type":"tool_result","name","content"}
     / {"type":"token","content"} / {"type":"done"} / {"type":"error","message"}
 
+    history: 历史多轮消息 [{"role","content"}]，支持会话内多轮上下文
     force_retrieval: 前端「知识检索」开关，开启后强制先检索一次知识库再回答
     allow_fetch: 前端「网页抓取」开关，关闭时不向模型暴露 fetch_url 工具
     """
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_message},
-    ]
+    messages: List[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages.extend(history or [])
+    messages.append({"role": "user", "content": user_message})
     tools = _tools_schema(allow_fetch)
 
     try:

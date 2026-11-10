@@ -74,7 +74,11 @@ LLM_MODEL=deepseek-chat
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/health` | 服务状态、当前模型与知识库分块数 |
-| POST | `/api/chat` | SSE 对话（`message` / `force_retrieval` / `allow_fetch`） |
+| POST | `/api/chat` | SSE 对话（`message` / `session_id` / `force_retrieval` / `allow_fetch`），携带 `session_id` 时自动持久化 |
+| POST | `/api/sessions` | 创建会话 |
+| GET | `/api/sessions` | 会话列表（按最近更新排序） |
+| GET | `/api/sessions/{id}/messages` | 会话消息（含工具调用步骤） |
+| DELETE | `/api/sessions/{id}` | 删除会话 |
 | GET/POST | `/api/config` | 读取 / 更新模型服务配置 |
 | GET | `/api/knowledge` | 文档列表（含分块数） |
 | POST | `/api/knowledge/upload` | 上传文件 |

@@ -83,7 +83,11 @@ body {
   -webkit-backdrop-filter: blur(18px) saturate(1.7);
   box-shadow: 0 6px 24px rgba(31, 45, 80, 0.10);
 }
-.header-title { display: flex; align-items: center; gap: 9px; }
+.header-title {
+  display: flex; align-items: center; gap: 9px;
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  padding: 0;
+}
 .header-title h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.2px; color: var(--text); }
 .logo {
   display: grid; place-items: center;
@@ -244,6 +248,64 @@ body {
 .composer-hint {
   max-width: 780px; margin: 8px auto 0; text-align: center;
   color: #9aa3b5; font-size: 12px;
+}
+
+/* ---------- 会话页布局（侧边栏 + 消息流） ---------- */
+.shell {
+  position: relative; z-index: 10;
+  display: flex; flex: 1; min-height: 0;
+}
+.sidebar {
+  position: fixed; top: 64px; bottom: 0; left: 0; width: 240px;
+  padding: 14px 10px;
+  display: flex; flex-direction: column; gap: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border-right: 1px solid rgba(255, 255, 255, 0.7);
+  z-index: 20;
+}
+.new-chat {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; padding: 10px; border-radius: 12px;
+  border: 1px solid var(--border-strong); background: var(--bg-card);
+  color: var(--text); font-size: 14px; cursor: pointer; font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+.new-chat:hover { border-color: var(--accent); background: var(--accent-soft); }
+.new-chat svg { color: var(--accent); }
+.sess-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.sess-empty { color: var(--text-dim); font-size: 12.5px; text-align: center; padding: 18px 0; }
+.sess-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  font-size: 13.5px; color: var(--text);
+  transition: background 0.15s;
+}
+.sess-item:hover { background: rgba(255, 255, 255, 0.8); }
+.sess-item.active { background: var(--accent-soft); color: #3b5bfd; }
+.sess-title {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sess-del {
+  opacity: 0; display: grid; place-items: center;
+  border: none; background: none; cursor: pointer;
+  width: 20px; height: 20px; border-radius: 6px; color: var(--text-dim);
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.sess-item:hover .sess-del { opacity: 1; }
+.sess-del:hover { background: #fee2e2; color: var(--err); }
+.chat-page {
+  flex: 1; display: flex; flex-direction: column; min-width: 0;
+  margin-left: 240px; margin-top: 62px; height: calc(100vh - 62px);
+}
+.chat-page .chat { padding-top: 16px; }
+.chat-page .composer { padding-bottom: 14px; }
+@media (max-width: 820px) {
+  .sidebar { display: none; }
+  .chat-page { margin-left: 0; }
 }
 
 /* ---------- chat ---------- */
