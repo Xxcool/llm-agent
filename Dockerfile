@@ -1,6 +1,9 @@
 # 多阶段构建：前端构建 → 后端运行时（单容器同时服务 API 与页面）
 FROM node:22-alpine AS fe
 WORKDIR /app/frontend
+# 可选：构建期注入访问令牌（会进入前端产物，仅作受控部署的访问门槛）
+ARG VITE_API_TOKEN=""
+ENV VITE_API_TOKEN=$VITE_API_TOKEN
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./

@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-81%20passed-3fb950)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-83%20passed-3fb950)](.github/workflows/ci.yml)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
 
@@ -48,7 +48,7 @@
 | **富文本渲染** | 代码块（高亮/复制/下载）、表格（复制 CSV）、mermaid 流程图、LaTeX 公式、图片/音视频/文件卡片 |
 | **消息操作** | 复制 / 重新生成 / 朗读（Edge 神经语音 + 播放声波动画）/ 点赞点踩（原因面板，持久化） |
 | **会话管理** | 搜索、置顶、重命名、多选批量操作、空会话不进入历史列表（前端首条消息时才创建） |
-| **测试体系** | 64 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 17 个前端用例 + 真实链路端到端验证脚本 |
+| **测试体系** | 66 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 17 个前端用例 + 真实链路端到端验证脚本 |
 
 ## 架构
 
@@ -161,6 +161,11 @@ LLM_MODEL=deepseek-flash
 | `RAG_TOP_K` | `4` | 检索返回条数 |
 | `RAG_SCORE_THRESHOLD` | `0.58` | 检索相似度阈值，低于阈值不硬凑无关内容 |
 | `MAX_TOOL_ROUNDS` | `6` | Agent 工具循环上限 |
+| `API_TOKEN` | 空（关闭） | 为 `/api/*` 增加共享访问令牌（健康检查除外） |
+| `CORS_ORIGINS` | 本地 5173 地址 | 允许的前端来源，逗号分隔；显式设为 `*` 才放行全部 |
+
+> 安全说明：`API_TOKEN` 是单租户共享访问令牌，适合内网/受控部署，不等同于多用户登录认证；
+> 前端构建时需用 `VITE_API_TOKEN` 注入同一值。令牌会进入前端产物，公网场景应使用反向代理鉴权或登录体系。
 
 ## 知识库
 
@@ -215,7 +220,7 @@ LLM_MODEL=deepseek-flash
 GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest 与前端 vitest + 构建。
 
 ```bash
-cd backend && .venv/bin/python -m pytest tests -q   # 后端 64 用例
+cd backend && .venv/bin/python -m pytest tests -q   # 后端 66 用例
 cd frontend && npm test                             # 前端 17 用例
 ```
 
@@ -237,7 +242,7 @@ cd frontend && npm test                             # 前端 17 用例
 | `test_agent.py` | 8 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验、SSRF 内网/重定向拦截 |
 | `test_plans.py` | 7 | 方案规范化与校验、多候选 SSE、选择互斥、单方案兼容、非法参数容错 |
 | `test_tasks.py` | 7 | 任务拆解与幂等、未确认方案拦截、文档交付、代码 diff 审批与落盘校验、绝对路径/穿越防护、任务状态守卫、文件数上限 |
-| `test_api.py` | 14 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路/多 token 事件、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式 |
+| `test_api.py` | 16 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路/多 token 事件、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式、API Token/CORS |
 
 真实链路（服务健康 → 配置连通 → 注入标记文档 → SSE 提问 → 断言检索命中 + 回答含标记 + 持久化 → 清理）：
 

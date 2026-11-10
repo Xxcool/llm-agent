@@ -271,3 +271,20 @@ def test_chat_emits_multiple_streamed_token_events(tmp_app):
     msgs = client.get(f"/api/sessions/{sid}/messages").json()["messages"]
     assert msgs[-1]["content"] == "你好"
     client.delete(f"/api/sessions/{sid}")
+
+
+def test_api_token_is_optional_and_protects_api(tmp_app, monkeypatch):
+    """设置 API_TOKEN 后保护 /api/*；健康检查保持公开，便于监控。"""
+    monkeypatch.setattr(tmp_app.config, "API_TOKEN", "secret-token")
+    assert client.get("/api/config").status_code == 401
+    assert client.get("/api/config", headers={"X-API-Token": "wrong"}).status_code == 401
+    assert client.get("/api/config", headers={"X-API-Token": "secret-token"}).status_code == 200
+    assert client.get("/api/health").status_code == 200
+
+
+def test_cors_defaults_reject_unknown_origin(tmp_app):
+    """默认 CORS 只放行本地开发地址，不再使用 *。"""
+    evil = client.get("/api/health", headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in evil.headers
+    local = client.get("/api/health", headers={"Origin": "http://127.0.0.1:5173"})
+    assert local.headers.get("access-control-allow-origin") == "http://127.0.0.1:5173"

@@ -1,5 +1,6 @@
 """FastAPI 入口：SSE 对话 + 运行时 LLM 配置 + 知识库管理。"""
 import hashlib
+import hmac
 import io
 import json
 import re
@@ -10,7 +11,7 @@ from typing import List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -22,9 +23,30 @@ from .store import ChatStore
 from .tools import ToolExecutor, fetch_text
 
 app = FastAPI(title="LLM Agent 智能对话平台", version="0.2.0")
+
+
+@app.middleware("http")
+async def require_api_token(request, call_next):
+    """可选 API Token：设置 API_TOKEN 后保护 /api/*（健康检查除外）。
+
+    默认不启用，保持本地单机开箱即用；公网部署务必设置。
+    """
+    if (
+        config.API_TOKEN
+        and request.url.path.startswith("/api/")
+        and request.url.path != "/api/health"
+        and request.method != "OPTIONS"
+    ):
+        token = request.headers.get("x-api-token", "")
+        if not hmac.compare_digest(token, config.API_TOKEN):
+            return JSONResponse({"detail": "未授权：缺少或错误的 API Token"}, status_code=401)
+    return await call_next(request)
+
+
+# 注意：CORS 在 Token 中间件之后添加，确保 401 响应也带 CORS 头
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 演示用；生产请改为前端域名
+    allow_origins=config.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

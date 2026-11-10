@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChatMessage, MessageFeedback } from '../types'
-import { saveMessageFeedback } from '../api'
+import { apiFetch, saveMessageFeedback } from '../api'
 import { IconAlert, IconCheck, IconCopy, IconRefresh, IconSpeaker, IconThumbDown, IconThumbUp, IconX } from './icons'
 import { MarkdownView } from './MarkdownView'
 
@@ -109,7 +109,7 @@ export function MessageBubble({ message, streaming, onRegenerate }: {
     setSpeaking(true)
     try {
       // 优先走后端 Edge 神经语音（自然拟人），失败降级浏览器本地 TTS
-      const resp = await fetch(`/api/tts?text=${encodeURIComponent(text)}`)
+      const resp = await apiFetch(`/api/tts?text=${encodeURIComponent(text)}`)
       if (seq !== speakSeqRef.current) return // 期间被停止
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const blob = await resp.blob()

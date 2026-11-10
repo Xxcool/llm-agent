@@ -40,7 +40,7 @@ flowchart LR
 | 工具调用 | `search_knowledge` / `fetch_url`，最多 6 轮工具循环，思考模型 `reasoning_content` 兼容 |
 | 过程可观测 | SSE 事件流（tool_call / tool_result / token / done / error）+ 前端工具时间线 |
 | 来源追溯 | 回答标注来源文件，前端可展开查看检索到的原文片段 |
-| 质量保障 | 64 个 pytest 用例（含后续阶段）+ 真实链路端到端验证脚本 |
+| 质量保障 | 66 个 pytest 用例（含后续阶段）+ 真实链路端到端验证脚本 |
 
 **验收**：可对任意入库文档提问，回答包含来源标注，无关问题如实拒答。已验证通过。
 
@@ -124,6 +124,7 @@ flowchart LR
 - 测试：`test_tasks.py` 扩到 6 例（含代码 diff 审批、落盘校验、路径穿越防护），当时全量 50 passed
 - 安全/正确性加固：知识库删除改为路径语义校验并转义 LIKE 通配符；抓取工具拒绝内网地址与内网重定向；任务 apply/discard 增加 review 状态守卫；修复多轮对话重复注入当前用户消息；绝对路径改为拒绝、单任务文件上限对齐 6 个；全量 58 passed
 - 真流式：Provider 新增 `chat_stream`，最终回答逐 token 推送；工具调用参数与方案 JSON 继续整轮缓冲；前端移除固定速度打字机队列；新增流式解析/SSE 分片回归测试，全量 64 passed
+- 访问安全：CORS 默认改为本地开发地址白名单；新增可选 `API_TOKEN` 保护 `/api/*`，前端用 `VITE_API_TOKEN` 注入；全量 66 passed
 
 **后续（P4 记忆层）**：交付物归档回知识库、自动复盘、反馈反哺检索。
 
@@ -154,7 +155,7 @@ flowchart LR
 
 | 层 | 用例数 | 命令 | 覆盖范围 |
 |---|---|---|---|
-| 后端（pytest） | 64 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
+| 后端（pytest） | 66 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
 | 前端（vitest + Testing Library） | 17 | `cd frontend && npm test` | api 请求契约、方案卡片与多方案对比表、任务看板（拆解/执行/diff 审批）、Composer 交互 |
 | 真实链路（脚本） | 端到端 | `cd backend && .venv/bin/python scripts/verify_real.py` | 真实模型 + RAG 检索 + SSE + 持久化 |
 

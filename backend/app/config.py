@@ -13,6 +13,18 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 # 单次模型调用超时（秒）：方案/任务交付物等长文本生成需要更宽裕的时间
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "180"))
 
+# 安全：可选 API Token（为空则不启用）；CORS 默认只放行本地开发地址
+# 生产部署请设置 API_TOKEN，并同时用 VITE_API_TOKEN 构建前端
+API_TOKEN = os.getenv("API_TOKEN", "").strip()
+CORS_ORIGINS = [
+    item.strip()
+    for item in os.getenv(
+        "CORS_ORIGINS",
+        "http://127.0.0.1:5173,http://localhost:5173,http://[::1]:5173",
+    ).split(",")
+    if item.strip()
+]
+
 # Embedding：auto = 优先 fastembed 本地模型，失败降级 hash 向量（零依赖可跑）
 EMBED_BACKEND = os.getenv("EMBED_BACKEND", "auto")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-small-zh-v1.5")

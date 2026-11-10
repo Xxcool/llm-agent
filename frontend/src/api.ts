@@ -1,6 +1,17 @@
 import type { AgentEvent, HealthInfo, MessageFeedback, Plan, PlanStatus, Task, TaskCheck } from './types'
 import type { ToolStep } from './types'
 
+/** 可选 API Token：与后端 API_TOKEN 对应，构建时通过 VITE_API_TOKEN 注入 */
+const API_TOKEN = import.meta.env.VITE_API_TOKEN
+
+export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers)
+  if (API_TOKEN && String(input).startsWith('/api')) {
+    headers.set('X-API-Token', API_TOKEN)
+  }
+  return fetch(input, { ...init, headers })
+}
+
 /**
  * 解析 SSE 文本缓冲区，按 "data: {...}" 行切分事件。
  * 参考开源 chat UI（chatgpt-web / LobeChat）的 fetch 流式解析模式，
@@ -36,7 +47,7 @@ export async function streamChat(
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const resp = await fetch('/api/chat', {
+  const resp = await apiFetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, session_id: sessionId, ...options }),
@@ -67,7 +78,7 @@ export async function streamChat(
 }
 
 export async function fetchHealth(): Promise<HealthInfo> {
-  const resp = await fetch('/api/health')
+  const resp = await apiFetch('/api/health')
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return (await resp.json()) as HealthInfo
 }
@@ -84,7 +95,7 @@ export interface PlatformConfig {
 }
 
 export async function fetchConfig(): Promise<PlatformConfig> {
-  const resp = await fetch('/api/config')
+  const resp = await apiFetch('/api/config')
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return (await resp.json()) as PlatformConfig
 }
@@ -94,7 +105,7 @@ export async function saveConfig(cfg: {
   api_key?: string
   model?: string
 }): Promise<{ status: string; provider: string }> {
-  const resp = await fetch('/api/config', {
+  const resp = await apiFetch('/api/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cfg),
@@ -109,7 +120,7 @@ export async function testConfig(cfg: {
   model: string
   api_key?: string
 }): Promise<{ ok: boolean; reply?: string; error?: string }> {
-  const resp = await fetch('/api/config/test', {
+  const resp = await apiFetch('/api/config/test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(cfg),
@@ -126,14 +137,14 @@ export interface KnowledgeDoc {
 }
 
 export async function listKnowledge(): Promise<KnowledgeDoc[]> {
-  const resp = await fetch('/api/knowledge')
+  const resp = await apiFetch('/api/knowledge')
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   const data = (await resp.json()) as { docs: KnowledgeDoc[] }
   return data.docs
 }
 
 export async function addKnowledgeText(name: string, text: string): Promise<void> {
-  const resp = await fetch('/api/knowledge/text', {
+  const resp = await apiFetch('/api/knowledge/text', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, text }),
@@ -144,7 +155,7 @@ export async function addKnowledgeText(name: string, text: string): Promise<void
 export async function uploadKnowledgeFile(file: File): Promise<void> {
   const form = new FormData()
   form.append('file', file)
-  const resp = await fetch('/api/knowledge/upload', { method: 'POST', body: form })
+  const resp = await apiFetch('/api/knowledge/upload', { method: 'POST', body: form })
   if (!resp.ok) {
     const detail = await resp.json().catch(() => null) as { detail?: string } | null
     throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
@@ -166,7 +177,7 @@ export async function uploadKnowledgeDir(
     form.append('files', it.file)
     form.append('paths', it.relPath)
   }
-  const resp = await fetch('/api/knowledge/upload-dir', { method: 'POST', body: form })
+  const resp = await apiFetch('/api/knowledge/upload-dir', { method: 'POST', body: form })
   if (!resp.ok) {
     const detail = await resp.json().catch(() => null) as { detail?: string } | null
     throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
@@ -175,7 +186,7 @@ export async function uploadKnowledgeDir(
 }
 
 export async function deleteKnowledge(source: string): Promise<void> {
-  const resp = await fetch(`/api/knowledge?source=${encodeURIComponent(source)}`, {
+  const resp = await apiFetch(`/api/knowledge?source=${encodeURIComponent(source)}`, {
     method: 'DELETE',
   })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
@@ -188,7 +199,7 @@ export interface ImportResult {
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const resp = await fetch(path, {
+  const resp = await apiFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -226,20 +237,20 @@ export interface StoredMessage {
 }
 
 export async function createSession(): Promise<SessionInfo> {
-  const resp = await fetch('/api/sessions', { method: 'POST' })
+  const resp = await apiFetch('/api/sessions', { method: 'POST' })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return (await resp.json()) as SessionInfo
 }
 
 export async function listSessions(): Promise<SessionInfo[]> {
-  const resp = await fetch('/api/sessions')
+  const resp = await apiFetch('/api/sessions')
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   const data = (await resp.json()) as { sessions: SessionInfo[] }
   return data.sessions
 }
 
 export async function deleteSession(id: string): Promise<void> {
-  const resp = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
+  const resp = await apiFetch(`/api/sessions/${id}`, { method: 'DELETE' })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
 }
 
@@ -248,7 +259,7 @@ export async function updateSession(
   id: string,
   patch: { title?: string; pinned?: boolean },
 ): Promise<SessionInfo> {
-  const resp = await fetch(`/api/sessions/${id}`, {
+  const resp = await apiFetch(`/api/sessions/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
@@ -258,7 +269,7 @@ export async function updateSession(
 }
 
 export async function getSessionMessages(id: string): Promise<StoredMessage[]> {
-  const resp = await fetch(`/api/sessions/${id}/messages`)
+  const resp = await apiFetch(`/api/sessions/${id}/messages`)
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   const data = (await resp.json()) as { messages: StoredMessage[] }
   return data.messages
@@ -266,7 +277,7 @@ export async function getSessionMessages(id: string): Promise<StoredMessage[]> {
 
 /** 获取单个会话信息（标题等） */
 export async function getSession(id: string): Promise<SessionInfo> {
-  const resp = await fetch(`/api/sessions/${id}`)
+  const resp = await apiFetch(`/api/sessions/${id}`)
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return (await resp.json()) as SessionInfo
 }
@@ -276,7 +287,7 @@ export async function saveMessageFeedback(
   messageId: number,
   fb: { type: 'up' | 'down' | 'none'; reason?: string; comment?: string },
 ): Promise<void> {
-  const resp = await fetch(`/api/messages/${messageId}/feedback`, {
+  const resp = await apiFetch(`/api/messages/${messageId}/feedback`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(fb),
@@ -290,7 +301,7 @@ export async function updatePlanStatus(
   status: PlanStatus,
   planId?: string,
 ): Promise<Plan[]> {
-  const resp = await fetch(`/api/messages/${messageId}/plan`, {
+  const resp = await apiFetch(`/api/messages/${messageId}/plan`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status, plan_id: planId }),
@@ -307,7 +318,7 @@ export async function updatePlanStatus(
 
 /** 把已确认方案拆解为任务（幂等） */
 export async function breakdownTasks(messageId: number, planId?: string): Promise<Task[]> {
-  const resp = await fetch(`/api/messages/${messageId}/tasks`, {
+  const resp = await apiFetch(`/api/messages/${messageId}/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ plan_id: planId }),
@@ -321,7 +332,7 @@ export async function breakdownTasks(messageId: number, planId?: string): Promis
 }
 
 export async function listTasks(sessionId: string): Promise<Task[]> {
-  const resp = await fetch(`/api/sessions/${sessionId}/tasks`)
+  const resp = await apiFetch(`/api/sessions/${sessionId}/tasks`)
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   const data = (await resp.json()) as { tasks: Task[] }
   return data.tasks
@@ -329,7 +340,7 @@ export async function listTasks(sessionId: string): Promise<Task[]> {
 
 /** 执行单个任务，产出 Markdown 交付物 */
 export async function runTask(taskId: number): Promise<Task> {
-  const resp = await fetch(`/api/tasks/${taskId}/run`, { method: 'POST' })
+  const resp = await apiFetch(`/api/tasks/${taskId}/run`, { method: 'POST' })
   if (!resp.ok) {
     const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
     throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
@@ -340,7 +351,7 @@ export async function runTask(taskId: number): Promise<Task> {
 
 /** 批准代码类交付：写入工作区沙箱并校验 */
 export async function applyTask(taskId: number): Promise<{ task: Task; written: string[]; checks: TaskCheck[] }> {
-  const resp = await fetch(`/api/tasks/${taskId}/apply`, { method: 'POST' })
+  const resp = await apiFetch(`/api/tasks/${taskId}/apply`, { method: 'POST' })
   if (!resp.ok) {
     const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
     throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
@@ -350,7 +361,7 @@ export async function applyTask(taskId: number): Promise<{ task: Task; written: 
 
 /** 丢弃代码类交付（不落盘） */
 export async function discardTask(taskId: number): Promise<Task> {
-  const resp = await fetch(`/api/tasks/${taskId}/discard`, { method: 'POST' })
+  const resp = await apiFetch(`/api/tasks/${taskId}/discard`, { method: 'POST' })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   const data = (await resp.json()) as { task: Task }
   return data.task
