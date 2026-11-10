@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { deleteSession, listSessions, updateSession } from '../api'
 import type { SessionInfo } from '../api'
 import { IconApi, IconBolt, IconBook, IconX } from './icons'
+import { ProviderMark } from './providerInfo'
 
 /** DeepSeek 式圆环加号（开启新对话） */
 export function IconNewChat({ size = 15 }: { size?: number }) {
@@ -161,6 +162,8 @@ export function Sidebar({
   healthState,
   healthError,
   onActiveDeleted,
+  provider,
+  providerLabel,
 }: {
   activeId: string | null
   onSelect: (id: string) => void
@@ -175,6 +178,10 @@ export function Sidebar({
   healthError?: string | null
   /** 当前打开的会话被删除（单个或批量）后回调——用于切换到新对话 */
   onActiveDeleted: () => void
+  /** 已接入的服务商（品牌徽标用） */
+  provider?: { name: string; color: string } | null
+  /** 已接入的「服务商 · 模型」文案 */
+  providerLabel?: string | null
 }) {
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [showSearch, setShowSearch] = useState(false)
@@ -388,10 +395,21 @@ export function Sidebar({
         </div>
       ) : (
         <div className="sb-bottom">
-          <span className="sb-status">
-            <span className={`dot ${healthState === 'error' ? 'err' : isDemo ? 'mock' : ''}`} />
-            {healthState === 'error' ? '模型服务异常' : isDemo ? '演示模式（未接入 Key）' : '模型服务已接入'}
-          </span>
+          {healthState === 'ok' && provider && providerLabel ? (
+            <button
+              className="sb-status sb-provider"
+              onClick={onOpenSettings}
+              title="点击查看接入配置"
+            >
+              <ProviderMark name={provider.name} color={provider.color} size={14} />
+              <span className="sb-provider-text">{providerLabel}</span>
+            </button>
+          ) : (
+            <span className="sb-status">
+              <span className={`dot ${healthState === 'error' ? 'err' : isDemo ? 'mock' : ''}`} />
+              {healthState === 'error' ? '模型服务异常' : isDemo ? '演示模式（未接入 Key）' : '模型服务已接入'}
+            </span>
+          )}
           {healthState === 'error' && healthError && (
             <span className="sb-status-error" title={healthError}>{healthError}</span>
           )}

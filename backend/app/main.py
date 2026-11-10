@@ -108,6 +108,8 @@ def health():
         "provider": _provider.name,
         "model": rt.get("model") or config.LLM_MODEL,
         "chunks": chunks,
+        # API 地址非敏感（不含 Key），前端据此识别服务商品牌并展示
+        "base_url": rt.get("base_url") or config.LLM_BASE_URL,
     }
     if _provider.name == "openai":
         # 真实探测：只看「模型服务现在能不能用」，欠费/无效 Key 都会在这里暴露

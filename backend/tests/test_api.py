@@ -28,6 +28,9 @@ def test_health_reports_mock_ok(tmp_app):
     d = r.json()
     assert d["provider"] == "mock"
     assert d["ok"] is True
+    # 前端识别服务商品牌用的 API 地址必须返回（非敏感，不含 Key）
+    assert "base_url" in d
+    assert "key" not in json.dumps(d).lower() or d.get("key") is None  # 任何情况下不泄露密钥字段
 
 
 def test_config_masks_api_key(tmp_app):

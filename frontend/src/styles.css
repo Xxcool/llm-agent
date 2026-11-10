@@ -114,6 +114,10 @@ body {
   color: var(--text-dim);
 }
 .status-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); }
+/* 已接入时展示「logo 服务商 · 模型」，超长截断 */
+.status-chip { max-width: 300px; }
+.chip-provider { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status-chip.ok { color: var(--ok); }
 .status-chip.ok .dot { background: var(--ok); }
 .status-chip.demo { color: var(--warn); }
@@ -337,6 +341,17 @@ body {
 .sb-status .dot { width: 7px; height: 7px; border-radius: 50%; background: #34c77b; }
 .sb-status .dot.mock { background: #f5a623; }
 .sb-status .dot.err { background: #e5484d; }
+/* 已接入：品牌行（logo + 服务商 · 模型），点击打开接入配置 */
+.sb-provider {
+  border: none; background: none; cursor: pointer;
+  max-width: 100%; text-align: left;
+  border-radius: 8px; transition: background 0.15s ease;
+}
+.sb-provider:hover { background: rgba(15, 17, 20, 0.05); }
+.sb-provider-text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text); font-weight: 500;
+}
 .sb-status-error {
   font-size: 11px; color: #e5484d;
   padding: 0 6px;

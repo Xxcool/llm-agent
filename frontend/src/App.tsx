@@ -8,6 +8,7 @@ import { Sidebar } from './components/Sidebar'
 import { Home } from './pages/Home'
 import { ChatPage } from './pages/Chat'
 import { IconApi, IconBolt, IconBook } from './components/icons'
+import { ProviderMark, identifyProvider } from './components/providerInfo'
 
 export default function App() {
   const [path, setPath] = useState(window.location.pathname)
@@ -55,6 +56,9 @@ export default function App() {
   const isDemo = health?.provider === 'mock'
   // 状态：未连接 / 演示模式 / 连接异常（真实探测失败）/ 已接入
   const healthState = !health ? 'down' : isDemo ? 'demo' : health.ok === false ? 'error' : 'ok'
+  // 已接入时展示品牌与模型：按 base_url host 识别服务商
+  const preset = health ? identifyProvider(health.base_url) : null
+  const providerLabel = preset && health?.model ? `${preset.name} · ${health.model}` : null
 
   // 首页提问：新页签打开会话页（首页保留），问题通过 URL 参数带走
   const askOnHome = useCallback(
@@ -99,6 +103,8 @@ export default function App() {
               isDemo={Boolean(isDemo)}
               healthState={healthState}
               healthError={health?.ok === false ? health.error : null}
+              provider={preset ? { name: preset.name, color: preset.color } : null}
+              providerLabel={providerLabel}
               onActiveDeleted={() => navigate('/c/new')}
             />
           )}
@@ -138,11 +144,17 @@ export default function App() {
                 <h1>LLM Agent 智能对话平台</h1>
               </button>
               <div className="header-actions">
-                <span className={`status-chip ${healthState}`} title={health?.ok === false ? health.error : undefined}>
+                <span className={`status-chip ${healthState}`} title={health?.ok === false ? health.error : providerLabel ? `API 地址：${health?.base_url}` : undefined}>
                   <span className="dot" />
                   {healthState === 'down' ? '未连接'
                     : healthState === 'demo' ? '演示模式'
                     : healthState === 'error' ? '模型服务异常'
+                    : preset && providerLabel ? (
+                        <span className="chip-provider">
+                          <ProviderMark name={preset.name} color={preset.color} size={13} />
+                          <span className="chip-text">{providerLabel}</span>
+                        </span>
+                      )
                     : '已接入'}
                 </span>
                 <button className="icon-btn" title="知识库管理" onClick={() => setShowKnowledge(true)}>

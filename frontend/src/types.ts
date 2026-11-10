@@ -54,6 +54,8 @@ export interface HealthInfo {
   provider: string
   chunks: number
   model?: string
+  /** 当前接入的 API 地址（非敏感，前端据此识别服务商品牌） */
+  base_url?: string
   /** 模型服务真实探测结果（openai provider 才探测） */
   ok?: boolean
   error?: string
