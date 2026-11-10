@@ -306,7 +306,7 @@ export function Sidebar({
             {g.items.map((s) => (
               <div
                 key={s.id}
-                className={`sess-item ${s.id === activeId ? 'active' : ''} ${selected.has(s.id) ? 'checked' : ''}`}
+                className={`sess-item ${s.id === activeId && renamingId !== s.id ? 'active' : ''} ${selected.has(s.id) ? 'checked' : ''} ${renamingId === s.id ? 'renaming' : ''}`}
                 onClick={() => (selecting ? toggleSelected(s.id) : onSelect(s.id))}
                 title={s.title}
               >

@@ -439,10 +439,13 @@ body {
 .sess-item.checked .sess-check { background: var(--accent); border-color: var(--accent); }
 .sess-rename {
   flex: 1; min-width: 0;
-  border: 1.5px solid var(--accent); border-radius: 7px;
-  padding: 3px 7px; font-size: 13px; font-family: inherit; color: var(--text);
+  border: 1px solid #d5dae4; border-radius: 9px;
+  padding: 7px 10px; font-size: 13.5px; font-family: inherit; color: var(--text);
   outline: none; background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
+.sess-rename:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(77, 107, 254, 0.08); }
+.sess-item.renaming { background: transparent; padding: 0; }
 /* 「…」操作菜单 */
 .sess-item { position: relative; }
 .sess-menu {
