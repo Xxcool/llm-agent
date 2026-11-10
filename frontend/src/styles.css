@@ -212,9 +212,13 @@ body {
   margin-top: 8px; background: #0c0f17; border: 1px solid var(--border);
   border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--text-dim);
   white-space: pre-wrap; word-break: break-all;
-  max-height: 180px; overflow-y: auto;
+  max-height: 220px; overflow-y: scroll;
   font-family: var(--mono); line-height: 1.55;
 }
+.tool-result::-webkit-scrollbar { width: 8px; }
+.tool-result::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+.tool-result::-webkit-scrollbar-thumb:hover { background: #3d465a; }
+.tool-result::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.03); border-radius: 4px; }
 .tool-running { margin-top: 6px; color: var(--text-dim); font-size: 12px; }
 .tool-running::after { content: '⋯'; animation: blink 1.2s infinite; margin-left: 2px; }
 @keyframes blink { 50% { opacity: 0.25; } }

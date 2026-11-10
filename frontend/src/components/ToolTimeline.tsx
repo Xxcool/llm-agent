@@ -26,7 +26,7 @@ export function ToolTimeline({ steps }: { steps: ToolStep[] }) {
                   </code>
                 </div>
                 {step.result !== undefined && (
-                  <pre className="tool-result">{step.result.slice(0, 400)}{step.result.length > 400 ? '…' : ''}</pre>
+                  <pre className="tool-result">{step.result}</pre>
                 )}
                 {step.result === undefined && <div className="tool-running">执行中…</div>}
               </div>
