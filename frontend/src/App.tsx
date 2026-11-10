@@ -6,6 +6,7 @@ import { Composer } from './components/Composer'
 import { ToolTimeline } from './components/ToolTimeline'
 import { SettingsModal } from './components/SettingsModal'
 import { KnowledgePanel } from './components/KnowledgePanel'
+import { GridBackdrop } from './components/GridBackdrop'
 
 let nextId = 1
 
@@ -138,25 +139,31 @@ export default function App() {
 
   const isDemo = health?.provider === 'mock'
   const hasChat = messages.length > 0
+  const [heroScrolled, setHeroScrolled] = useState(false)
+  const glass = hasChat || heroScrolled // 会话态常驻毛玻璃；首页滚动后出现
 
   return (
     <div className="app">
+      <GridBackdrop />
+
       <header className="header">
-        <div className="header-title">
-          <span className="logo">⚡</span>
-          <h1>LLM Agent 智能对话平台</h1>
-        </div>
-        <div className="header-actions">
-          <span className={`status-chip ${isDemo ? 'demo' : 'ok'}`}>
-            <span className="dot" />
-            {health ? (isDemo ? '演示模式' : '已接入') : '未连接'}
-          </span>
-          <button className="icon-btn" title="知识库管理" onClick={() => setShowKnowledge(true)}>
-            📚
-          </button>
-          <button className="icon-btn" title="接入模型服务" onClick={() => setShowSettings(true)}>
-            ⚙️
-          </button>
+        <div className={`nav-pill ${glass ? 'glass' : ''}`}>
+          <div className="header-title">
+            <span className="logo">⚡</span>
+            <h1>LLM Agent 智能对话平台</h1>
+          </div>
+          <div className="header-actions">
+            <span className={`status-chip ${isDemo ? 'demo' : 'ok'}`}>
+              <span className="dot" />
+              {health ? (isDemo ? '演示模式' : '已接入') : '未连接'}
+            </span>
+            <button className="icon-btn" title="知识库管理" onClick={() => setShowKnowledge(true)}>
+              📚
+            </button>
+            <button className="icon-btn" title="接入模型服务" onClick={() => setShowSettings(true)}>
+              ⚙️
+            </button>
+          </div>
         </div>
       </header>
 
@@ -182,16 +189,18 @@ export default function App() {
           <Composer disabled={thinking} onSend={send} onStop={stop} />
         </>
       ) : (
-        <main className="hero">
-          <div className="hero-mark">⚡</div>
-          <h1 className="hero-title">让知识可对话</h1>
-          <p className="hero-sub">
+        <main
+          className="hero"
+          onScroll={(e) => setHeroScrolled((e.target as HTMLElement).scrollTop > 12)}
+        >
+          <h1 className="hero-title rise" style={{ animationDelay: '0.08s' }}>让知识可对话</h1>
+          <p className="hero-sub rise" style={{ animationDelay: '0.12s' }}>
             上传文档构建专属知识库，Agent 自动检索、抓取网页、调用工具，流式生成回答
           </p>
-          <div className="hero-composer">
+          <div className="hero-composer rise" style={{ animationDelay: '0.18s' }}>
             <Composer disabled={thinking} onSend={send} onStop={stop} hero autoFocusInput />
           </div>
-          <div className="hero-quick">
+          <div className="hero-quick rise" style={{ animationDelay: '0.24s' }}>
             <button className="quick-chip" onClick={() => setShowSettings(true)}>
               {isDemo ? '⚙️ 接入模型服务' : '✅ 模型已接入'}
             </button>
