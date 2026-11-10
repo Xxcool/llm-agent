@@ -207,16 +207,19 @@ body {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .hero-composer-inner .composer-box { max-width: none; }
+.ask-box textarea { min-height: 48px; }
 .composer-box:focus-within {
   border-color: rgba(77, 107, 254, 0.55);
   box-shadow: 0 10px 40px rgba(31, 45, 80, 0.12), 0 0 0 3px rgba(77, 107, 254, 0.08);
 }
-.composer textarea {
+.composer textarea,
+.ask-box textarea {
   width: 100%; background: none; border: none; outline: none; resize: none;
   color: var(--text); font-size: 15px; line-height: 1.6;
   font-family: inherit; max-height: 300px; min-height: 28px;
 }
-.composer textarea::placeholder { color: #9aa3b5; }
+.composer textarea::placeholder,
+.ask-box textarea::placeholder { color: #9aa3b5; }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
 .composer-chips { display: flex; gap: 8px; }
 .chip {
