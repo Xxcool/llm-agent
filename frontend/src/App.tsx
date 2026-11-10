@@ -43,6 +43,17 @@ export default function App() {
 
   useEffect(refreshHealth, [])
 
+  // 回答里的应用内动作链接（如演示模式的「接入真实模型服务」）：点击直接打开对应弹窗
+  useEffect(() => {
+    const onAction = (e: Event) => {
+      const url = (e as CustomEvent<string>).detail
+      if (url === 'app://settings') setShowSettings(true)
+      if (url === 'app://knowledge') setShowKnowledge(true)
+    }
+    window.addEventListener('llm-agent:app-action', onAction)
+    return () => window.removeEventListener('llm-agent:app-action', onAction)
+  }, [])
+
   const isSession = path.startsWith('/c/')
   // /c/new = 草稿新对话（不落库，首条消息发送时才创建会话）
   const isDraft = path === '/c/new' || path === '/c/new/'

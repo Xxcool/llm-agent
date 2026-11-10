@@ -849,6 +849,76 @@ body {
 }
 .msg-time { font-size: 11.5px; color: #b3bac8; margin-left: 6px; user-select: none; }
 
+/* 用户消息：气泡底只包住文字，复制/编辑/时间落到气泡下方（与助手消息一致） */
+.bubble.user,
+.chat-page .bubble.user {
+  background: transparent; border: none; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  padding: 0; border-radius: 0;
+  max-width: 76%;
+}
+.bubble.user .bubble-text {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 16px; border-top-right-radius: 6px;
+  padding: 11px 16px;
+  box-shadow: 0 4px 16px rgba(31, 45, 80, 0.06);
+  color: var(--text);
+  max-width: 100%;
+  word-break: break-word; font-size: 15px;
+}
+.chat-page .bubble.user .bubble-text { background: #e3ecfd; border: none; box-shadow: none; }
+
+/* 用户消息操作栏（复制 / 编辑）：默认隐藏，悬停或聚焦时出现 */
+.bubble.user .msg-actions.user-actions {
+  display: flex; justify-content: flex-end;
+  margin-top: 2px; padding-top: 0;
+  opacity: 0; transition: opacity 0.15s;
+}
+.bubble.user:hover .msg-actions.user-actions,
+.bubble.user .msg-actions.user-actions:focus-within { opacity: 1; }
+@media (hover: none) { .bubble.user .msg-actions.user-actions { opacity: 1; } }
+
+/* 用户消息编辑态：气泡退化为全宽输入区 */
+.bubble.user.editing {
+  max-width: 100%; width: 100%;
+  background: transparent; border: none; box-shadow: none; padding: 0;
+}
+.bubble-edit { width: 100%; }
+.bubble-edit-input {
+  width: 100%; box-sizing: border-box;
+  min-height: 46px; resize: vertical;
+  border-radius: 12px; border: 1px solid #c7d5f5;
+  background: #fff; padding: 10px 12px;
+  font: inherit; line-height: 1.5; color: var(--text);
+  outline: none;
+}
+.bubble-edit-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 91, 253, 0.12); }
+.bubble-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.bubble-edit-btn {
+  padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid rgba(15, 17, 20, 0.12); background: #fff;
+  color: var(--text); font-size: 13px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.bubble-edit-btn:hover { background: rgba(15, 17, 20, 0.04); }
+.bubble-edit-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.bubble-edit-btn.primary:hover { filter: brightness(1.05); }
+.bubble-edit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 回答里的应用内动作链接（点击打开配置弹窗） */
+.md-app-action {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.md-app-action:hover { opacity: 0.8; }
+
 /* 朗读中的音频波浪动画（DeepSeek 式蓝色声波）：自适应宽度，保证声波不出按钮 */
 .msg-act.speaking-wave { width: auto; min-width: 40px; padding: 0 12px; }
 .wave-bars {

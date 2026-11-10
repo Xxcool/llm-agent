@@ -293,6 +293,17 @@ export function ChatPage({
     runStream(userText, false)
   }
 
+  /** 编辑用户提问：替换内容并丢弃其后的所有消息，再用新内容重新生成回答 */
+  const editUserMessage = (msgId: number, newText: string) => {
+    if (thinkingRef.current) return
+    const idx = messages.findIndex((m) => m.id === msgId)
+    if (idx < 0) return
+    setMessages((m) =>
+      m.slice(0, idx + 1).map((x) => (x.id === msgId ? { ...x, content: newText } : x)),
+    )
+    runStream(newText, false)
+  }
+
   sendRef.current = send
 
   const stop = () => {
@@ -345,11 +356,18 @@ export function ChatPage({
                   <MessageBubble
                     message={msg}
                     streaming={msg.id === typingId}
+                    isLatest={msg.id === lastAssistantId}
                     onRegenerate={msg.id === lastAssistantId ? () => regenerate(msg.id) : undefined}
                   />
                 </div>
               )}
-              {msg.role === 'user' && <MessageBubble message={msg} streaming={false} />}
+              {msg.role === 'user' && (
+                <MessageBubble
+                  message={msg}
+                  streaming={false}
+                  onEdit={thinking ? undefined : (text) => editUserMessage(msg.id, text)}
+                />
+              )}
             </div>
           ))
         })()}

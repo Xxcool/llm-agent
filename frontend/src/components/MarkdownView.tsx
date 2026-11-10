@@ -286,6 +286,21 @@ export function MarkdownView({ content }: { content: string }) {
             if (AUDIO_EXT.includes(ext)) return <MediaPlayer kind="audio" src={url} />
             if (VIDEO_EXT.includes(ext)) return <MediaPlayer kind="video" src={url} />
             if (FILE_EXT.includes(ext)) return <FileCard href={url} />
+            // 应用内动作链接（如演示模式里的「接入真实模型服务」）：点击直接打开配置弹窗
+            if (url.startsWith('app://')) {
+              return (
+                <a
+                  href="#"
+                  className="md-app-action"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    window.dispatchEvent(new CustomEvent('llm-agent:app-action', { detail: url }))
+                  }}
+                >
+                  {children}
+                </a>
+              )
+            }
             return (
               <a href={url} target="_blank" rel="noreferrer">{children}</a>
             )
