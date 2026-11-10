@@ -238,3 +238,13 @@ export function IconFolder({ size = 16 }: IconProps) {
     </svg>
   )
 }
+
+/** 结构化方案（清单式文档，首页「结构化方案」卡片） */
+export function IconPlan({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none">
+      <rect x="3" y="1.9" width="10" height="12.2" rx="1.6" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.6 5.6h4.8M5.6 8h4.8M5.6 10.4h2.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}

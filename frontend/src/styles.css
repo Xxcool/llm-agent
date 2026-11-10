@@ -166,7 +166,7 @@ body {
 /* 首页下方功能区（提供滚动内容，配合导航收缩效果） */
 .hero-features {
   width: min(980px, 92vw);
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
   margin-top: 84px; padding-bottom: 48px;
 }
 .feature-card {
@@ -183,8 +183,19 @@ body {
   color: var(--accent); background: rgba(77, 107, 254, 0.09);
   margin-bottom: 10px;
 }
-.feature-card h3 { font-size: 14.5px; font-weight: 600; margin-bottom: 6px; }
+.feature-card h3 { font-size: 14.5px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
 .feature-card p { font-size: 13px; color: #5a6478; line-height: 1.65; }
+/* 「新」能力高亮：结构化方案（P2 规划层） */
+.feature-card.feature-new {
+  border-color: rgba(107, 70, 193, 0.22);
+  box-shadow: 0 6px 24px rgba(107, 70, 193, 0.1);
+}
+.feature-card.feature-new .feature-icon { color: #6b46c1; background: rgba(107, 70, 193, 0.1); }
+.feature-badge {
+  font-size: 10.5px; font-weight: 500; color: #6b46c1;
+  background: #f1ecff; border: 1px solid #e0d4ff;
+  border-radius: 999px; padding: 1px 7px; line-height: 1.5;
+}
 @media (max-width: 760px) {
   .hero-features { grid-template-columns: 1fr; }
 }

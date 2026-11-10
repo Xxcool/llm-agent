@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { IconAlert, IconApi, IconBook, IconChat, IconCheck, IconDatabase, IconSparkle, IconWrench } from '../components/icons'
+import { IconAlert, IconApi, IconBook, IconChat, IconCheck, IconDatabase, IconPlan, IconSparkle, IconWrench } from '../components/icons'
 
 const FEATURES = [
-  { icon: <IconDatabase size={20} />, title: 'RAG 检索增强', desc: '企业文档自动分块向量化，回答前检索最相关片段并标注来源文件，内容可追溯' },
-  { icon: <IconWrench size={20} />, title: 'Function Calling', desc: '智能体按需调用知识检索与网页抓取工具，多轮闭环完成跨文档问答' },
-  { icon: <IconSparkle size={20} />, title: 'SSE 流式输出', desc: 'Fetch Stream 逐字呈现回答，工具调用过程以时间线实时可视化' },
+  { icon: <IconDatabase size={20} />, title: 'RAG 检索增强', desc: '企业文档按段落分块向量化，回答前检索最相关片段并标注来源文件，内容可追溯' },
+  { icon: <IconPlan size={20} />, title: '结构化方案', desc: '基于检索证据生成实施方案：目标、步骤、依据与风险一目了然，人工确认后才进入执行', isNew: true },
+  { icon: <IconWrench size={20} />, title: 'Function Calling', desc: '智能体按需调用知识检索、网页抓取与方案生成工具，多轮闭环完成复杂任务' },
+  { icon: <IconSparkle size={20} />, title: 'SSE 流式输出', desc: 'Fetch Stream 逐字呈现回答，工具调用与方案生成过程实时可视化' },
 ]
 
 export function Home({
@@ -40,7 +41,7 @@ export function Home({
     >
       <h1 className="hero-title rise" style={{ animationDelay: '0.08s' }}>让企业知识可对话</h1>
       <p className="hero-sub rise" style={{ animationDelay: '0.12s' }}>
-        接入制度规范、产品文档与业务资料，智能体自动检索、标注来源、流式作答
+        接入制度规范、产品文档与业务资料，智能体自动检索、标注来源、流式作答，并给出可确认的实施方案
       </p>
       <div className="hero-composer rise" style={{ animationDelay: '0.18s' }}>
         <div className="composer-box ask-box">
@@ -105,9 +106,12 @@ export function Home({
 
       <section className="hero-features">
         {FEATURES.map((f) => (
-          <div className="feature-card" key={f.title}>
+          <div className={`feature-card ${f.isNew ? 'feature-new' : ''}`} key={f.title}>
             <div className="feature-icon">{f.icon}</div>
-            <h3>{f.title}</h3>
+            <h3>
+              {f.title}
+              {f.isNew && <span className="feature-badge">新</span>}
+            </h3>
             <p>{f.desc}</p>
           </div>
         ))}
