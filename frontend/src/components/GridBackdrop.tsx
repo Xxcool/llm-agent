@@ -27,8 +27,8 @@ export function GridBackdrop() {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, w, h)
 
-      const gap = 56
-      ctx.strokeStyle = 'rgba(58, 92, 148, 0.075)'
+      const gap = 64
+      ctx.strokeStyle = 'rgba(58, 92, 148, 0.05)'
       ctx.lineWidth = 1
       for (let x = 0; x <= w; x += gap) {
         ctx.beginPath()
@@ -67,7 +67,7 @@ export function GridBackdrop() {
     const particles = Array.from({ length: COUNT }, () => ({
       x: Math.random(),
       y: Math.random(),
-      r: Math.random() * 1.1 + 0.6,
+      r: Math.random() * 1.6 + 0.9,
       p: Math.random() * Math.PI * 2,
     }))
 
@@ -96,7 +96,7 @@ export function GridBackdrop() {
         if (p.y > 1.02) p.y = -0.02
         ctx.beginPath()
         ctx.arc(p.x * w, p.y * h, p.r, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(64, 104, 176, ${0.16 + 0.1 * Math.sin(p.p + t * 3)})`
+        ctx.fillStyle = `rgba(80, 116, 185, ${0.08 + 0.07 * Math.sin(p.p + t * 3)})`
         ctx.fill()
       }
       raf = requestAnimationFrame(tick)

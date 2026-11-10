@@ -41,13 +41,13 @@ body {
 }
 .backdrop-wash {
   position: absolute; inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(156, 193, 231, 0.85) 0%,
-    rgba(185, 210, 238, 0.42) 16%,
-    rgba(228, 238, 249, 0.18) 32%,
-    rgba(250, 250, 250, 0) 52%
-  );
+  background:
+    radial-gradient(640px 400px at 10% 6%, rgba(122, 162, 216, 0.52), transparent 72%),
+    radial-gradient(720px 460px at 88% 12%, rgba(148, 180, 228, 0.46), transparent 74%),
+    radial-gradient(520px 320px at 55% -4%, rgba(168, 198, 240, 0.5), transparent 72%),
+    radial-gradient(900px 520px at 32% 34%, rgba(196, 218, 246, 0.32), transparent 74%),
+    radial-gradient(760px 420px at 72% 42%, rgba(214, 230, 248, 0.28), transparent 76%),
+    linear-gradient(180deg, #b6cfec 0%, rgba(226, 238, 250, 0.4) 30%, rgba(250, 250, 250, 0) 58%);
 }
 .backdrop-layer {
   position: absolute; inset: 0;
