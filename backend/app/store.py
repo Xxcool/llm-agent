@@ -39,6 +39,12 @@ class ChatStore:
             """
         )
         self.conn.commit()
+        # 旧库迁移：sessions 补 pinned 列
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(sessions)").fetchall()]
+        if "pinned" not in cols:
+            with self._lock:
+                self.conn.execute("ALTER TABLE sessions ADD COLUMN pinned INTEGER DEFAULT 0")
+                self.conn.commit()
 
     def create_session(self, title: str = "新会话") -> dict:
         sid = uuid.uuid4().hex[:12]
@@ -49,14 +55,36 @@ class ChatStore:
                 (sid, title, now, now),
             )
             self.conn.commit()
-        return {"id": sid, "title": title, "created_at": now, "updated_at": now}
+        return {"id": sid, "title": title, "pinned": False, "created_at": now, "updated_at": now}
 
     def list_sessions(self) -> List[dict]:
         with self._lock:
             rows = self.conn.execute(
-                "SELECT id, title, updated_at FROM sessions ORDER BY updated_at DESC"
+                "SELECT id, title, pinned, updated_at FROM sessions "
+                "ORDER BY pinned DESC, updated_at DESC"
             ).fetchall()
-        return [{"id": r[0], "title": r[1], "updated_at": r[2]} for r in rows]
+        return [{"id": r[0], "title": r[1], "pinned": bool(r[2]), "updated_at": r[3]} for r in rows]
+
+    def update_session(self, sid: str, title: Optional[str] = None, pinned: Optional[bool] = None) -> Optional[dict]:
+        sets, args = [], []
+        if title is not None:
+            sets.append("title=?")
+            args.append(title.strip() or "新会话")
+        if pinned is not None:
+            sets.append("pinned=?")
+            args.append(1 if pinned else 0)
+        if not sets:
+            return None
+        args.append(sid)
+        with self._lock:
+            cur = self.conn.execute(f"UPDATE sessions SET {', '.join(sets)} WHERE id=?", args)
+            self.conn.commit()
+            if cur.rowcount == 0:
+                return None
+            row = self.conn.execute(
+                "SELECT id, title, pinned, updated_at FROM sessions WHERE id=?", (sid,)
+            ).fetchone()
+        return {"id": row[0], "title": row[1], "pinned": bool(row[2]), "updated_at": row[3]}
 
     def delete_session(self, sid: str) -> None:
         with self._lock:

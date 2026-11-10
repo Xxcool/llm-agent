@@ -168,6 +168,7 @@ export async function importUrls(urls: string[]): Promise<ImportResult> {
 export interface SessionInfo {
   id: string
   title: string
+  pinned: boolean
   updated_at: string
 }
 
@@ -194,6 +195,20 @@ export async function listSessions(): Promise<SessionInfo[]> {
 export async function deleteSession(id: string): Promise<void> {
   const resp = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+}
+
+/** 更新会话（重命名 / 置顶） */
+export async function updateSession(
+  id: string,
+  patch: { title?: string; pinned?: boolean },
+): Promise<SessionInfo> {
+  const resp = await fetch(`/api/sessions/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return (await resp.json()) as SessionInfo
 }
 
 export async function getSessionMessages(id: string): Promise<StoredMessage[]> {

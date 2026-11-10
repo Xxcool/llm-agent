@@ -244,6 +244,19 @@ def get_session_messages(sid: str):
     return {"messages": _ensure_store().get_messages(sid)}
 
 
+class SessionUpdateIn(BaseModel):
+    title: Optional[str] = None
+    pinned: Optional[bool] = None
+
+
+@app.patch("/api/sessions/{sid}")
+def update_session(sid: str, body: SessionUpdateIn):
+    result = _ensure_store().update_session(sid, title=body.title, pinned=body.pinned)
+    if result is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return result
+
+
 @app.delete("/api/sessions/{sid}")
 def delete_session(sid: str):
     _ensure_store().delete_session(sid)
