@@ -4,7 +4,6 @@ import type { ChatMessage, ToolStep } from '../types'
 import { MessageBubble } from '../components/MessageBubble'
 import { Composer } from '../components/Composer'
 import { ToolTimeline } from '../components/ToolTimeline'
-import { IconLink } from '../components/icons'
 
 let nextId = 1
 
@@ -201,13 +200,6 @@ export function ChatPage({
     <>
       <div className="chat-header">
         <span className="chat-header-title" title={title}>{title || '新会话'}</span>
-        <button
-          className="icon-btn"
-          title="复制会话链接"
-          onClick={() => navigator.clipboard.writeText(window.location.href).catch(() => undefined)}
-        >
-          <IconLink size={14} />
-        </button>
       </div>
       <main className="chat">
         {(() => {

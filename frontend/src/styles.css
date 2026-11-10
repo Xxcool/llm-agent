@@ -514,7 +514,6 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   min-width: 0;
 }
-.chat-header .icon-btn { color: var(--text-dim); }
 .chat-page .chat { padding-top: 24px; background: transparent; }
 .chat-page .composer {
   background: transparent; border: none;
