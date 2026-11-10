@@ -26,11 +26,12 @@ export function IconBook({ size = 16 }: IconProps) {
   )
 }
 
-export function IconSettings({ size = 16 }: IconProps) {
+export function IconApi({ size = 16 }: IconProps) {
   return (
     <svg {...base(size)}>
-      <circle cx="8" cy="8" r="2.2" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M8 1.6v1.5M8 12.9v1.5M1.6 8h1.5M12.9 8h1.5M3.5 3.5l1.06 1.06M11.44 11.44l1.06 1.06M12.5 3.5l-1.06 1.06M4.56 11.44 3.5 12.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+      <rect x="1.9" y="2.8" width="12.2" height="10.4" rx="2.2" stroke="currentColor" strokeWidth="1.3" />
+      <path d="m4.9 6.3 2.1 2.1-2.1 2.1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8.7 10.8h2.7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }

@@ -8,11 +8,11 @@ import { SettingsModal } from './components/SettingsModal'
 import { KnowledgePanel } from './components/KnowledgePanel'
 import { GridBackdrop } from './components/GridBackdrop'
 import {
+  IconApi,
   IconBolt,
   IconBook,
   IconCheck,
   IconDatabase,
-  IconSettings,
   IconSparkle,
   IconWrench,
 } from './components/icons'
@@ -173,7 +173,7 @@ export default function App() {
               <IconBook size={15} />
             </button>
             <button className="icon-btn" title="接入模型服务" onClick={() => setShowSettings(true)}>
-              <IconSettings size={15} />
+              <IconApi size={15} />
             </button>
           </div>
         </div>
@@ -232,7 +232,7 @@ export default function App() {
           </div>
           <div className="hero-quick rise" style={{ animationDelay: '0.24s' }}>
             <button className="quick-chip" onClick={() => setShowSettings(true)}>
-              {isDemo ? <IconSettings size={14} /> : <IconCheck size={14} />}
+              {isDemo ? <IconApi size={14} /> : <IconCheck size={14} />}
               {isDemo ? '接入模型服务' : '模型已接入'}
             </button>
             <button className="quick-chip" onClick={() => setShowKnowledge(true)}>
