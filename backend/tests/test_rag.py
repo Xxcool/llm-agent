@@ -38,7 +38,7 @@ def test_ingest_is_incremental(tmp_path):
 
 
 def test_prune_stale_chunks_of_deleted_files(tmp_path):
-    """文件被删除后，残留块必须清掉（回归：曾导致简历块永久污染检索）。"""
+    """文件被删除后，残留块必须清掉（回归：曾导致个人文档块永久污染检索）。"""
     rag = make_rag(tmp_path)
     kb = tmp_path / "kb"
     kb.mkdir()

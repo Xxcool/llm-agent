@@ -324,7 +324,7 @@ class UrlImportIn(BaseModel):
 
 @app.post("/api/knowledge/url")
 def import_urls(body: UrlImportIn):
-    """批量导入网页（如掘金文章链接）为知识库文档：抓正文 → 落盘 md → 入库。"""
+    """批量导入网页（如外部文档/制度页面链接）为知识库文档：抓正文 → 落盘 md → 入库。"""
     urls = [u.strip() for u in body.urls if u.strip()]
     if not urls:
         raise HTTPException(400, "至少提供一个链接")
@@ -482,3 +482,22 @@ def chat(body: ChatIn):
             store.add_message(body.session_id, "assistant", text, steps)
 
     return EventSourceResponse(gen())
+
+
+# ---------- 生产部署：托管前端构建产物（frontend/dist），单端口同时服务 API 与页面 ----------
+
+_FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if _FRONTEND_DIST.is_dir():
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str):
+        """SPA 回退：命中真实文件返回文件，其余路径回 index.html（/api 路由注册在前，优先匹配）。"""
+        candidate = (_FRONTEND_DIST / full_path).resolve()
+        if (
+            full_path
+            and candidate.is_file()
+            and _FRONTEND_DIST.resolve() in candidate.parents
+        ):
+            return FileResponse(candidate)
+        return FileResponse(_FRONTEND_DIST / "index.html")

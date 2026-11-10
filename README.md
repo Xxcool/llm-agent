@@ -41,7 +41,7 @@ npm install && npm run dev   # http://localhost:5173，已代理 /api 到 8000
 LLM_PROVIDER=openai \
 LLM_BASE_URL=https://api.deepseek.com \
 LLM_API_KEY=你的Key \
-LLM_MODEL=deepseek-chat
+LLM_MODEL=deepseek-flash
 ```
 
 ## 配置
@@ -54,14 +54,49 @@ LLM_MODEL=deepseek-chat
 | `KNOWLEDGE_DIR` | `backend/knowledge` | 知识库文档目录（.md/.txt，含子目录） |
 | `RAG_TOP_K` | `4` | 检索返回条数 |
 | `MAX_TOOL_ROUNDS` | `6` | Agent 工具循环上限 |
+| `RAG_SCORE_THRESHOLD` | `0.58` | 检索相似度阈值，低于阈值不硬凑无关内容 |
+
+## 部署
+
+后端是 Python FastAPI（本地 ONNX embedding + SQLite 文件库 + 磁盘知识目录），
+**不适合** Cloudflare Workers（无法跑 Python/ONNX/文件系统）或 Supabase（仅是数据库 BaaS，非应用运行时）。
+推荐以下两种方式：
+
+### 方式一：Docker 单容器（推荐）
+
+```bash
+docker build -t llm-agent .
+docker run -d -p 8000:8000 \
+  -e LLM_BASE_URL=https://api.deepseek.com \
+  -e LLM_API_KEY=你的Key \
+  -e LLM_MODEL=deepseek-flash \
+  -v ./knowledge:/app/backend/knowledge \
+  -v ./data:/app/backend/data \
+  llm-agent
+```
+
+多阶段构建：前端 `npm run build` 产物由 FastAPI 托管（SPA 回退已内置），
+**单端口同时服务 API 与页面**；知识库与数据通过 volume 持久化。
+适配 Render / Railway / Fly.io 等支持 Docker 的托管平台，或任意 VPS。
+
+### 方式二：手动部署
+
+```bash
+npm --prefix frontend install && npm --prefix frontend run build  # 构建前端
+cd backend && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000  # 自动托管 frontend/dist
+```
+
+前后端分离托管也可：前端 `dist/` 丢 Vercel / Cloudflare Pages，后端单独部署并配置 CORS。
 
 ## 知识库
 
-知识库用于沉淀企业制度、产品文档、技术资料与业务流程，支持三种录入方式（均在前端「知识库管理」面板）：
+知识库用于沉淀企业制度、产品文档、技术资料与业务流程，支持四种录入方式（均在前端「知识库管理」面板）：
 
-1. **上传文件**：`.md / .txt / .markdown`（单文件）
-2. **文本录入**：粘贴内容并命名，适合短文档与 FAQ
-3. **链接导入**：批量抓取外部文档页正文（单次最多 10 条）
+1. **上传文件夹**：批量选择整个文件夹，保留目录结构入库（适合「项目知识库 / 产品文档 / 方案设计」等资产目录）
+2. **上传文件**：`.md / .txt / .markdown`（单文件）
+3. **文本录入**：粘贴内容并命名，适合短文档与 FAQ
+4. **链接导入**：批量抓取外部文档页正文（单次最多 10 条）
 
 文档自动分块（500 字符 / 50 重叠）→ 向量化 → SQLite 入库，按 `相对路径:mtime` 增量重建；
 回答时标注来源文件，可追溯到原文。

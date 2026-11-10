@@ -1,0 +1,11 @@
+.git
+frontend/node_modules
+frontend/dist
+backend/.venv
+backend/data
+backend/knowledge/uploads
+backend/knowledge/personal
+backend/personal
+backend/.pytest_tmp
+**/__pycache__
+**/.DS_Store

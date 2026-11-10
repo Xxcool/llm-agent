@@ -20,7 +20,7 @@ def make_store(tmp_path):
     kb = tmp_path / "kb"
     kb.mkdir(parents=True)
     (kb / "team-intro.md").write_text(
-        "# 平台研发组\n\n9 年前端经验，核心项目：统一身份认证平台（Java + Spring Cloud），"
+        "# 平台研发团队\n\n团队负责企业内部平台建设，核心项目：统一身份认证平台（Java + Spring Cloud），"
         "运维监控中心（Go + Prometheus），以及开发中的 LLM Agent 智能对话平台。\n",
         encoding="utf-8",
     )
@@ -36,21 +36,21 @@ def make_store(tmp_path):
 
 def test_rag_search(tmp_path):
     store, _ = make_store(tmp_path)
-    hits = store.search("数字孪生")
+    hits = store.search("运维监控")
     assert hits, "检索应有结果"
-    assert any("智慧仓储" in t for _, t, _ in hits)
+    assert any("Prometheus" in t for _, t, _ in hits)
 
 
 def test_agent_loop_with_tools(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SCORE_THRESHOLD", 0.0)  # 关闭阈值，专注验证工具循环
     store, _ = make_store(tmp_path)
     executor = ToolExecutor(store)
-    events = list(run_agent(MockProvider(), executor, "平台研发组做过哪些项目？"))
+    events = list(run_agent(MockProvider(), executor, "研发团队做过哪些项目？"))
     types = [e["type"] for e in events]
     assert "tool_call" in types and "tool_result" in types, types
     assert types[-1] == "done"
     answer = "".join(e["content"] for e in events if e["type"] == "token")
-    assert "智慧仓储" in answer
+    assert "Prometheus" in answer
 
 
 def test_search_threshold_rejects_unrelated(tmp_path, monkeypatch):
@@ -58,7 +58,7 @@ def test_search_threshold_rejects_unrelated(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SCORE_THRESHOLD", 0.99)  # 高阈值必然触发拒绝分支
     store, _ = make_store(tmp_path)
     executor = ToolExecutor(store)
-    result = executor.run("search_knowledge", {"query": "平台研发组做过哪些项目"})
+    result = executor.run("search_knowledge", {"query": "研发团队做过哪些项目"})
     assert result == "知识库中没有相关内容。"
 
 
