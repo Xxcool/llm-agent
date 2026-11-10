@@ -63,8 +63,6 @@ def main() -> int:
             raise SystemExit(1)
 
         # ---- 2. 模型真实可用 ----
-        t = c.post("/api/config/test", json={"base_url": "", "model": ""}).json() \
-            if False else None  # 占位：真实配置从 health 读取
         # 用当前生效配置做真实调用（读取 config 再 test）
         cfg = c.get("/api/config").json()
         t = c.post("/api/config/test", json={"base_url": cfg["base_url"], "model": cfg["model"]}).json()
