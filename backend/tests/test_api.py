@@ -129,6 +129,49 @@ def test_knowledge_upload_rejects_bad_type(tmp_app):
     assert r.status_code == 400
 
 
+def test_upload_folder_preserves_structure(tmp_app):
+    """文件夹批量上传：保留相对目录结构、跳过不支持格式、拒绝路径穿越。"""
+    r = client.post(
+        "/api/knowledge/upload-dir",
+        files=[
+            ("files", ("a.md", "# 项目知识库\n\n前端方案要点。", "text/markdown")),
+            ("files", ("b.md", "产品文档内容", "text/markdown")),
+            ("files", ("c.png", b"bin", "image/png")),
+            ("paths", (None, "项目知识库/前端方案/a.md", "text/plain")),
+            ("paths", (None, "产品文档/b.md", "text/plain")),
+            ("paths", (None, "产品文档/c.png", "text/plain")),
+        ],
+    )
+    assert r.status_code == 200
+    d = r.json()
+    assert d["saved"] == ["uploads/项目知识库/前端方案/a.md", "uploads/产品文档/b.md"]
+    assert d["skipped"] == ["产品文档/c.png"]
+    assert d["total_chunks"] >= 2
+    # 目录结构反映在来源列表中（来源 = 相对路径，检索时可溯源）
+    srcs = [x["source"] for x in client.get("/api/knowledge").json()["docs"]]
+    assert "uploads/项目知识库/前端方案/a.md" in srcs
+
+    # 路径穿越被拒（记入 skipped，不落盘）
+    r2 = client.post(
+        "/api/knowledge/upload-dir",
+        files=[("files", ("evil.md", b"bad", "text/markdown")),
+               ("paths", (None, "../../evil.md", "text/plain"))],
+    )
+    assert r2.status_code == 200
+    assert r2.json()["skipped"] == ["../../evil.md"]
+    assert not (tmp_app.KNOWLEDGE_ROOT.parent / "evil.md").exists()
+
+
+def test_upload_folder_count_mismatch(tmp_app):
+    r = client.post(
+        "/api/knowledge/upload-dir",
+        files=[("files", ("a.md", b"x", "text/markdown")),
+               ("paths", (None, "a.md", "text/plain")),
+               ("paths", (None, "b.md", "text/plain"))],
+    )
+    assert r.status_code == 400
+
+
 def test_tts_synthesizes_and_caches(tmp_app, monkeypatch):
     """/api/tts：合成成功返回 MP3 + 缓存命中，失败 502，前端据此降级本地 TTS。"""
     import app.main as m

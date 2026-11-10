@@ -4,10 +4,11 @@ import {
   deleteKnowledge,
   importUrls,
   listKnowledge,
+  uploadKnowledgeDir,
   uploadKnowledgeFile,
 } from '../api'
 import type { KnowledgeDoc } from '../api'
-import { IconFile, IconLink, IconPencil, IconUpload, IconX } from './icons'
+import { IconFile, IconFolder, IconLink, IconPencil, IconUpload, IconX } from './icons'
 
 type ImportMode = 'none' | 'paste' | 'url'
 
@@ -21,6 +22,26 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
   const [docText, setDocText] = useState('')
   const [urlText, setUrlText] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const folderRef = useRef<HTMLInputElement>(null)
+
+  /** 上传整个文件夹：保留相对目录结构，仅收 .md/.txt/.markdown */
+  const handleFolderUpload = (fileList: FileList) =>
+    run(async () => {
+      const SUPPORTED = /\.(md|txt|markdown)$/i
+      const items = Array.from(fileList)
+        .map((f) => ({ file: f, relPath: f.webkitRelativePath || f.name }))
+        .filter((it) => SUPPORTED.test(it.relPath))
+      const total = fileList.length
+      if (items.length === 0) {
+        setMessage(`所选文件夹中没有可入库的文档（仅支持 .md / .txt / .markdown，共 ${total} 个文件）`)
+        return
+      }
+      const r = await uploadKnowledgeDir(items)
+      const skipNote = r.skipped.length ? `，跳过 ${r.skipped.length} 个不支持的文件` : ''
+      setMessage(
+        `文件夹导入完成：入库 ${r.saved.length} 篇${skipNote}，共 ${r.total_chunks} 个知识块（目录结构已保留）`,
+      )
+    })
 
   const refresh = () => {
     listKnowledge()
@@ -91,7 +112,10 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
         </p>
 
         <div className="panel-actions">
-          <button className="btn primary" onClick={() => fileRef.current?.click()} disabled={busy}>
+          <button className="btn primary" onClick={() => folderRef.current?.click()} disabled={busy}>
+            <IconFolder size={14} /> 上传文件夹
+          </button>
+          <button className="btn ghost" onClick={() => fileRef.current?.click()} disabled={busy}>
             <IconUpload size={14} /> 上传文件
           </button>
           <button className="btn ghost" onClick={() => setMode(mode === 'paste' ? 'none' : 'paste')}>
@@ -108,6 +132,18 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
             onChange={(e) => {
               const f = e.target.files?.[0]
               if (f) handleUpload(f)
+              e.target.value = ''
+            }}
+          />
+          <input
+            ref={folderRef}
+            type="file"
+            hidden
+            multiple
+            {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
+            onChange={(e) => {
+              const files = e.target.files
+              if (files && files.length > 0) handleFolderUpload(files)
               e.target.value = ''
             }}
           />

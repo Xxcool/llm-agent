@@ -224,3 +224,17 @@ export function IconChat({ size = 16 }: IconProps) {
     </svg>
   )
 }
+
+/** 文件夹（知识库「上传文件夹」入口） */
+export function IconFolder({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none">
+      <path
+        d="M1.9 4.1c0-.7.6-1.3 1.3-1.3h3l1.4 1.5h5.2c.7 0 1.3.6 1.3 1.3v6.3c0 .7-.6 1.3-1.3 1.3H3.2c-.7 0-1.3-.6-1.3-1.3V4.1Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}

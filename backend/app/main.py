@@ -6,9 +6,9 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -264,6 +264,43 @@ async def upload_knowledge(file: UploadFile = File(...)):
     rag.ingest_dir(KNOWLEDGE_ROOT)
     total = rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     return {"status": "ok", "saved": str(target.relative_to(KNOWLEDGE_ROOT)), "total_chunks": total}
+
+
+@app.post("/api/knowledge/upload-dir")
+async def upload_knowledge_dir(
+    files: List[UploadFile] = File(...),
+    paths: List[str] = Form(...),
+):
+    """批量上传文件夹：按浏览器提供的相对路径保留目录结构入库。
+
+    规则：仅收 .md/.txt/.markdown（其余记入 skipped 跳过）；路径清洗拒绝
+    绝对路径与「..」穿越，落盘后必须仍位于 uploads/ 内；最后统一增量入库。
+    """
+    if len(files) != len(paths):
+        raise HTTPException(400, "files 与 paths 数量不一致")
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    upload_root = UPLOAD_DIR.resolve()
+    saved: List[str] = []
+    skipped: List[str] = []
+    for f, rel in zip(files, paths):
+        rel = (rel or f.filename or "").replace("\\", "/").lstrip("/")
+        if not rel:
+            continue
+        if ".." in rel.split("/") or not rel.lower().endswith((".md", ".txt", ".markdown")):
+            skipped.append(rel)
+            continue
+        target = (UPLOAD_DIR / rel).resolve()
+        if upload_root != target and upload_root not in target.parents:
+            skipped.append(rel)  # 越界路径防护
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("wb") as fp:
+            shutil.copyfileobj(f.file, fp)
+        saved.append(str(target.relative_to(KNOWLEDGE_ROOT)))
+    rag = _ensure_state()
+    rag.ingest_dir(KNOWLEDGE_ROOT)
+    total = rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    return {"status": "ok", "saved": saved, "skipped": skipped, "total_chunks": total}
 
 
 @app.post("/api/knowledge/text")

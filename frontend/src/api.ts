@@ -149,6 +149,29 @@ export async function uploadKnowledgeFile(file: File): Promise<void> {
   }
 }
 
+/** 批量上传文件夹：items 为文件 + 其在文件夹内的相对路径（保留目录结构） */
+export interface FolderUploadResult {
+  saved: string[]
+  skipped: string[]
+  total_chunks: number
+}
+
+export async function uploadKnowledgeDir(
+  items: { file: File; relPath: string }[],
+): Promise<FolderUploadResult> {
+  const form = new FormData()
+  for (const it of items) {
+    form.append('files', it.file)
+    form.append('paths', it.relPath)
+  }
+  const resp = await fetch('/api/knowledge/upload-dir', { method: 'POST', body: form })
+  if (!resp.ok) {
+    const detail = await resp.json().catch(() => null) as { detail?: string } | null
+    throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
+  }
+  return (await resp.json()) as FolderUploadResult
+}
+
 export async function deleteKnowledge(source: string): Promise<void> {
   const resp = await fetch(`/api/knowledge?source=${encodeURIComponent(source)}`, {
     method: 'DELETE',
