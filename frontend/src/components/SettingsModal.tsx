@@ -7,6 +7,8 @@ import qwenLogo from '../assets/providers/qwen.svg'
 import moonshotLogo from '../assets/providers/moonshotai.svg'
 import ollamaLogo from '../assets/providers/ollama.svg'
 import anthropicLogo from '../assets/providers/anthropic.svg'
+import zhipuLogo from '../assets/providers/zhipu.svg'
+import googleLogo from '../assets/providers/google.svg'
 
 interface ProviderPreset {
   name: string
@@ -31,10 +33,12 @@ const PROVIDER_PRESETS: ProviderPreset[] = [
 /** 官方品牌 logo（Simple Icons，构建期内置）；没有的用品牌色字母徽标兜底 */
 const PROVIDER_LOGOS: Record<string, string> = {
   DeepSeek: deepseekLogo,
+  '智谱 GLM': zhipuLogo,
   通义千问: qwenLogo,
   Moonshot: moonshotLogo,
   '本地 Ollama': ollamaLogo,
   Claude: anthropicLogo,
+  'Google Gemini': googleLogo,
 }
 
 function ProviderMark({ name, color, size = 20 }: { name: string; color: string; size?: number }) {
