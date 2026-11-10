@@ -217,3 +217,10 @@ export async function getSessionMessages(id: string): Promise<StoredMessage[]> {
   const data = (await resp.json()) as { messages: StoredMessage[] }
   return data.messages
 }
+
+/** 获取单个会话信息（标题等） */
+export async function getSession(id: string): Promise<SessionInfo> {
+  const resp = await fetch(`/api/sessions/${id}`)
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return (await resp.json()) as SessionInfo
+}

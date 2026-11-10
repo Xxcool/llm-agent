@@ -86,6 +86,15 @@ class ChatStore:
             ).fetchone()
         return {"id": row[0], "title": row[1], "pinned": bool(row[2]), "updated_at": row[3]}
 
+    def get_session(self, sid: str) -> Optional[dict]:
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT id, title, pinned, updated_at FROM sessions WHERE id=?", (sid,)
+            ).fetchone()
+        if not row:
+            return None
+        return {"id": row[0], "title": row[1], "pinned": bool(row[2]), "updated_at": row[3]}
+
     def delete_session(self, sid: str) -> None:
         with self._lock:
             self.conn.execute("DELETE FROM messages WHERE session_id=?", (sid,))

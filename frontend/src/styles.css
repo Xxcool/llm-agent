@@ -496,6 +496,22 @@ body {
   height: 100vh;
   background: #fff;
 }
+/* 会话标题头（固定顶部，DeepSeek 式） */
+.chat-header {
+  flex-shrink: 0; height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border-bottom: 1px solid #f0f1f5;
+}
+.chat-header-title {
+  font-size: 14.5px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.chat-header .icon-btn { color: var(--text-dim); }
 .chat-page .chat { padding-top: 24px; background: transparent; }
 .chat-page .composer {
   background: transparent; border: none;
@@ -593,6 +609,65 @@ body {
   border: 1px solid #dbe4ff;
   border-radius: 5px; padding: 1px 6px; font-size: 13px; color: #3b5bfd;
   font-family: var(--mono);
+}
+/* 代码块（语言标签 + 复制按钮 + 语法高亮） */
+.code-block {
+  margin: 12px 0; border-radius: 12px; overflow: hidden;
+  border: 1px solid #e8eaf0; background: #f9fafc;
+}
+.code-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 14px;
+  background: #f2f4f8; border-bottom: 1px solid #e8eaf0;
+}
+.code-lang {
+  font-size: 12px; color: #6b7487; font-family: var(--mono);
+}
+.code-copy {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: none; background: none; cursor: pointer;
+  font-size: 12px; font-family: inherit; color: #6b7487;
+  padding: 3px 8px; border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.code-copy:hover { color: var(--text); background: rgba(15, 17, 20, 0.06); }
+.code-copy.ok { color: #16a34a; }
+.code-block pre {
+  margin: 0; border: none; border-radius: 0;
+  background: transparent; padding: 13px 15px;
+  font-size: 13px; line-height: 1.65;
+}
+/* highlight.js 语法配色（浅色，贴近 DeepSeek 演示） */
+.hljs-keyword, .hljs-selector-tag, .hljs-literal { color: #7c3aed; }
+.hljs-string, .hljs-attr { color: #b45309; }
+.hljs-title, .hljs-name { color: #2563eb; }
+.hljs-comment, .hljs-quote { color: #9aa3b5; font-style: italic; }
+.hljs-number, .hljs-symbol { color: #0e7490; }
+.hljs-built_in, .hljs-type { color: #0e7490; }
+.hljs-variable, .hljs-template-variable { color: #be185d; }
+/* mermaid 流程图 */
+.mermaid-box {
+  display: flex; justify-content: center;
+  margin: 12px 0; padding: 14px;
+  background: #f9fafc; border: 1px solid #e8eaf0; border-radius: 12px;
+  overflow-x: auto;
+}
+.mermaid-box svg { max-width: 100%; height: auto; }
+.mermaid-loading {
+  margin: 12px 0; padding: 18px; text-align: center;
+  color: var(--text-dim); font-size: 13px;
+  background: #f9fafc; border: 1px dashed #e4e7ee; border-radius: 12px;
+}
+.mermaid-fallback {
+  margin: 12px 0; padding: 13px 15px;
+  background: #f9fafc; border: 1px dashed #e4e7ee; border-radius: 12px;
+  overflow-x: auto; font-size: 13px; color: var(--text-dim);
+}
+/* markdown 图片适配 */
+.md-img {
+  display: block; max-width: 100%; height: auto;
+  border-radius: 10px; margin: 10px 0;
+  border: 1px solid #eef0f4;
 }
 .bubble-md pre {
   background: #f7f8fc; border: 1px solid var(--border); border-radius: 10px;

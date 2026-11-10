@@ -239,6 +239,14 @@ def list_sessions():
     return {"sessions": _ensure_store().list_sessions()}
 
 
+@app.get("/api/sessions/{sid}")
+def get_session(sid: str):
+    s = _ensure_store().get_session(sid)
+    if s is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return s
+
+
 @app.get("/api/sessions/{sid}/messages")
 def get_session_messages(sid: str):
     return {"messages": _ensure_store().get_messages(sid)}

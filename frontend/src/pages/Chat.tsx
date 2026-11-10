@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { getSessionMessages, streamChat } from '../api'
+import { getSession, getSessionMessages, streamChat } from '../api'
 import type { ChatMessage, ToolStep } from '../types'
 import { MessageBubble } from '../components/MessageBubble'
 import { Composer } from '../components/Composer'
 import { ToolTimeline } from '../components/ToolTimeline'
+import { IconLink } from '../components/icons'
 
 let nextId = 1
 
@@ -18,6 +19,7 @@ export function ChatPage({
   refreshSessions: () => void
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [title, setTitle] = useState('')
   const [thinking, setThinking] = useState(false)
   const [typingId, setTypingId] = useState<number | null>(null)
   const [knowledgeOn, setKnowledgeOn] = useState(true)
@@ -56,19 +58,29 @@ export function ChatPage({
     if (typeTimerRef.current !== null) window.clearInterval(typeTimerRef.current)
   }, [])
 
-  // 加载会话历史；若携带首条消息（首页跳转而来）自动发送
+  // 加载会话历史与标题；若携带首条消息（首页跳转而来）自动发送
   useEffect(() => {
     let cancelled = false
     setMessages([])
+    setTitle('')
     getSessionMessages(sessionId)
       .then((rows) => {
         if (!cancelled) setMessages(rows.map((r) => ({ ...r, id: nextId++ })))
       })
       .catch(() => setMessages([]))
+    getSession(sessionId)
+      .then((s) => {
+        if (!cancelled) setTitle(s.title)
+      })
+      .catch(() => undefined)
     return () => {
       cancelled = true
     }
   }, [sessionId])
+
+  const refreshTitle = () => {
+    getSession(sessionId).then((s) => setTitle(s.title)).catch(() => undefined)
+  }
 
   const sendRef = useRef<(text: string) => void>(() => undefined)
 
@@ -153,6 +165,7 @@ export function ChatPage({
         setThinking(false)
         abortRef.current = null
         refreshSessions()
+        refreshTitle()
       })
   }
 
@@ -165,6 +178,16 @@ export function ChatPage({
 
   return (
     <>
+      <div className="chat-header">
+        <span className="chat-header-title" title={title}>{title || '新会话'}</span>
+        <button
+          className="icon-btn"
+          title="复制会话链接"
+          onClick={() => navigator.clipboard.writeText(window.location.href).catch(() => undefined)}
+        >
+          <IconLink size={14} />
+        </button>
+      </div>
       <main className="chat">
         {messages.map((msg) => (
           <div key={msg.id} className={`turn ${msg.role}`}>
