@@ -1,7 +1,7 @@
 # LLM Agent 智能对话平台
 
-**面向企业知识资产的 RAG 智能体**：知识库检索增强 + Function Calling 工具循环 + SSE 流式输出，
-前端把 Agent 的工具调用过程与引用来源实时可视化。
+**企业知识驱动的 AI 智能体**：从知识库检索增强，到基于证据的**多方案对比与人工确认**，
+再到方案拆解为任务、逐项执行产出交付物——让企业知识从「问答」走向「交付」。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
@@ -9,7 +9,9 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
 [![Tests](https://img.shields.io/badge/tests-48%20passed-3fb950)](backend/tests)
 
-一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可对话**的问答能力。
+一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
+
+**能力主线**：感知（检索）→ 规划（多方案）→ 行动（任务执行）→ 记忆（沉淀）
 
 ## 界面预览
 
