@@ -58,9 +58,11 @@ class ChatStore:
         return {"id": sid, "title": title, "pinned": False, "created_at": now, "updated_at": now}
 
     def list_sessions(self) -> List[dict]:
+        """只返回已有消息的会话——空会话（点开新对话但没聊）不进历史列表。"""
         with self._lock:
             rows = self.conn.execute(
                 "SELECT id, title, pinned, updated_at FROM sessions "
+                "WHERE EXISTS (SELECT 1 FROM messages m WHERE m.session_id = sessions.id) "
                 "ORDER BY pinned DESC, updated_at DESC"
             ).fetchall()
         return [{"id": r[0], "title": r[1], "pinned": bool(r[2]), "updated_at": r[3]} for r in rows]

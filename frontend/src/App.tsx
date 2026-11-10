@@ -67,7 +67,7 @@ export default function App() {
             <Sidebar
               activeId={sessionId}
               onSelect={(id) => navigate(`/c/${id}`)}
-              onNew={(id) => navigate(`/c/${id}`)}
+              onNew={() => navigate('/')}
               refreshSignal={sessionRefresh}
               onCollapse={() => setSidebarOpen(false)}
               onOpenSettings={() => setShowSettings(true)}

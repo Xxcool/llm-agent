@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { createSession, deleteSession, listSessions, updateSession } from '../api'
+import { deleteSession, listSessions, updateSession } from '../api'
 import type { SessionInfo } from '../api'
 import { IconApi, IconBolt, IconBook, IconX } from './icons'
 
@@ -161,7 +161,8 @@ export function Sidebar({
 }: {
   activeId: string | null
   onSelect: (id: string) => void
-  onNew: (id: string) => void
+  /** 开启新对话：不落库，回首页入口，首条消息发送时才创建会话 */
+  onNew: () => void
   refreshSignal: number
   onCollapse: () => void
   onOpenSettings: () => void
@@ -169,7 +170,6 @@ export function Sidebar({
   isDemo: boolean
 }) {
   const [sessions, setSessions] = useState<SessionInfo[]>([])
-  const [creating, setCreating] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -196,16 +196,7 @@ export function Sidebar({
 
   const groups = useMemo(() => groupSessions(filtered), [filtered])
 
-  const handleNew = async () => {
-    if (creating) return
-    setCreating(true)
-    try {
-      const s = await createSession()
-      onNew(s.id)
-    } finally {
-      setCreating(false)
-    }
-  }
+  const handleNew = () => onNew()
 
   const handleDelete = async (id: string) => {
     await deleteSession(id).catch(() => undefined)
@@ -282,9 +273,9 @@ export function Sidebar({
         </div>
       </div>
 
-      <button className="new-chat" onClick={handleNew} disabled={creating}>
+      <button className="new-chat" onClick={handleNew}>
         <IconNewChat />
-        {creating ? '创建中…' : '开启新对话'}
+        开启新对话
       </button>
 
       {selecting && (
