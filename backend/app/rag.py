@@ -43,10 +43,27 @@ class RagStore:
         self.embedder = get_embedder()
 
     def ingest_dir(self, docs_dir: Path) -> int:
-        """目录（含子目录）下所有 .md/.txt 入库（按相对路径+mtime 增量跳过未变更文件）。"""
+        """目录（含子目录）下所有 .md/.txt 入库（按相对路径+mtime 增量跳过未变更文件）。
+
+        入库前先清理「文件已删除但块仍残留」的脏数据，避免已移除的文档继续污染检索结果。
+        """
         n = 0
         root = Path(docs_dir)
         with self._lock:
+            live = {
+                str(f.relative_to(root))
+                for f in root.rglob("*")
+                if f.is_file() and f.suffix.lower() in (".md", ".txt")
+            }
+            stale = [
+                r[0] for r in self.conn.execute("SELECT DISTINCT source FROM chunks").fetchall()
+                if r[0].split(":")[0] not in live
+            ]
+            for sig in stale:
+                self.conn.execute("DELETE FROM chunks WHERE source=?", (sig,))
+            if stale:
+                self.conn.commit()
+
             for f in sorted(root.rglob("*")):
                 if not f.is_file() or f.suffix.lower() not in (".md", ".txt"):
                     continue

@@ -19,3 +19,4 @@ backend/data/
 *.tsbuildinfo
 backend/knowledge/uploads/
 backend/data/runtime_config.json
+backend/personal/

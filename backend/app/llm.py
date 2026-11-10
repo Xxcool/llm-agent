@@ -57,21 +57,64 @@ class OpenAICompatProvider(BaseProvider):
 
 
 class MockProvider(BaseProvider):
-    """离线测试用：首轮触发工具调用，次轮基于工具结果生成回答。"""
+    """离线演示用：首轮以用户原问题检索知识库，次轮基于真实检索结果生成摘录式回答。
+
+    不编造内容、不包含任何固定人名/个人信息——回复完全由检索到的片段驱动，
+    保证演示模式下的行为与真实 RAG 链路一致（只是少了大模型的润色组织）。
+    """
 
     name = "mock"
+
+    @staticmethod
+    def _last_user_message(messages: list) -> str:
+        for m in reversed(messages):
+            if m.get("role") == "user":
+                return (m.get("content") or "").strip()
+        return ""
 
     def chat(self, messages: list, tools: Optional[list] = None) -> ChatResponse:
         has_tool_result = any(m.get("role") == "tool" for m in messages)
         if not has_tool_result and tools:
+            # 用用户真实问题作为检索词（截断防超长）
+            query = self._last_user_message(messages)[:50] or "知识库"
             return ChatResponse(tool_calls=[{
                 "id": "call_1",
                 "name": "search_knowledge",
-                "arguments": {"query": "项目经历"},
+                "arguments": {"query": query},
             }])
-        results = [m.get("content", "") for m in messages if m.get("role") == "tool"]
-        snippet = (results[-1][:60] + "…") if results and results[-1] else ""
-        return ChatResponse(content=f"根据知识库检索结果（{snippet}）：平台研发组的核心项目包括生鲜供应链数字化平台、智慧仓储工业数字孪生大屏与正在开发的 LLM Agent 智能对话平台。")
+        # 次轮：基于最后一次工具结果组织回答
+        question = self._last_user_message(messages)
+        tool_contents = [m.get("content", "") for m in messages if m.get("role") == "tool"]
+        result = tool_contents[-1] if tool_contents else ""
+        return ChatResponse(content=self._demo_answer(question, result))
+
+    @staticmethod
+    def _demo_answer(question: str, result: str) -> str:
+        header = "（演示模式：未接入真实大模型，以下为检索结果摘录）\n\n"
+        if not result:
+            return header + "未获得检索结果，请重试或在「模型服务」中接入真实 Key。"
+        # 工具/抓取失败
+        if result.startswith(("抓取失败", "工具执行失败", "检索失败")):
+            return header + f"本次工具调用出现问题：{result[:120]}"
+        # 知识库无覆盖（与真实模型行为对齐：如实说明）
+        if "知识库中没有相关内容" in result:
+            topic = question[:30] or "该问题"
+            return header + f"知识库中暂无与「{topic}」相关的记录。\n\n建议先在「知识库管理」中上传相关文档，再重新提问。"
+        # 网页抓取结果（无 [来源] 前缀的纯文本）
+        if not result.startswith("["):
+            return header + f"已抓取网页正文并完成解析，关键内容摘录：\n\n> {result[:150]}…"
+        # 知识库检索结果：逐条列出来源与摘要
+        parts = [p for p in result.split("\n---\n") if p.strip()]
+        topic = question[:30] or "该问题"
+        lines = [header + f"针对「{topic}」，从知识库中检索到 {len(parts)} 个相关片段：", ""]
+        for p in parts[:3]:
+            src, _, text = p.partition("]")
+            src = src.lstrip("[").strip() or "未知来源"
+            snippet = (text.strip() or p.strip())[:80] + ("…" if len(text.strip()) > 80 else "")
+            lines.append(f"- **{src}**：{snippet}")
+        lines.append("")
+        lines.append("接入真实模型服务后（右上角「模型服务」填入 API Key），将基于以上片段生成完整、结构化的回答。")
+        return "\n".join(lines)
 
 
 def get_provider() -> BaseProvider:
