@@ -35,7 +35,7 @@ def _chunks(text: str) -> List[str]:
 
 
 class RagStore:
-    def __init__(self, db_path: Path = None):
+    def __init__(self, db_path: Path = None, embedder=None):
         self.db_path = Path(db_path or config.DB_PATH)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # FastAPI 同步/异步端点可能在不同线程访问，check_same_thread=False + 写锁
@@ -45,7 +45,7 @@ class RagStore:
             "CREATE TABLE IF NOT EXISTS chunks ("
             "id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, seq INTEGER, text TEXT, vec TEXT)"
         )
-        self.embedder = get_embedder()
+        self.embedder = embedder or get_embedder()
 
     def ingest_dir(self, docs_dir: Path) -> int:
         """目录（含子目录）下所有 .md/.txt 入库（按相对路径+mtime 增量跳过未变更文件）。

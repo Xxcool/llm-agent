@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-88%20passed-3fb950)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-89%20passed-3fb950)](.github/workflows/ci.yml)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
 
@@ -40,6 +40,7 @@
 | **多方案对比（M2）** | 同一诉求产出 2-3 个候选方案，按**成本 / 周期 / 风险**对比，模型标注推荐项；选定一个后其余候选自动驳回 |
 | **任务拆解与执行（P3）** | 已确认方案一键拆解为 3-6 个可执行任务（含类型/做法/预期产出），逐任务执行生成 **Markdown 交付物**并在看板中预览 |
 | **代码交付与 diff 审批（M4）** | 代码类任务产出**文件 diff 预览**，人工批准后写入工作区沙箱，自动做 Python 语法 / JSON 解析校验；路径白名单防穿越，命令执行默认关闭 |
+| **匿名工作区** | 无需登录；每个浏览器一个签名 Cookie，独立会话/知识库/Provider 配置；换浏览器或清 Cookie 即新工作区 |
 | **交付归档（P4/M5）** | 已完成任务一键归档到 `knowledge/沉淀/<年月>/`，保留方案 → 任务 → 交付物追溯链，归档后进入知识库可检索 |
 | **知识健康与复用（P4）** | 知识库健康度（文档/分块/沉淀/陈旧）、历史交付物复用推荐、反馈驱动来源重排 |
 | **Function Calling** | 智能体按需调用 `search_knowledge`（知识库检索）与 `fetch_url`（网页正文抓取），工具结果回填后继续推理，最多 6 轮闭环 |
@@ -50,7 +51,7 @@
 | **富文本渲染** | 代码块（高亮/复制/下载）、表格（复制 CSV）、mermaid 流程图、LaTeX 公式、图片/音视频/文件卡片 |
 | **消息操作** | 复制 / 重新生成 / 朗读（Edge 神经语音 + 播放声波动画）/ 点赞点踩（原因面板，持久化） |
 | **会话管理** | 搜索、置顶、重命名、多选批量操作、空会话不进入历史列表（前端首条消息时才创建） |
-| **测试体系** | 70 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 18 个前端用例 + 真实链路端到端验证脚本 |
+| **测试体系** | 71 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 18 个前端用例 + 真实链路端到端验证脚本 |
 
 ## 架构
 
@@ -163,11 +164,39 @@ LLM_MODEL=deepseek-flash
 | `RAG_TOP_K` | `4` | 检索返回条数 |
 | `RAG_SCORE_THRESHOLD` | `0.58` | 检索相似度阈值，低于阈值不硬凑无关内容 |
 | `MAX_TOOL_ROUNDS` | `6` | Agent 工具循环上限 |
+| `CLIENTS_DIR` | `backend/data/clients` | 匿名工作区根目录；每个浏览器一个子目录 |
+| `CLIENT_COOKIE_SECRET` | 自动生成 | 匿名 Cookie 签名密钥；生产建议显式设置 |
+| `CLIENT_COOKIE_SECURE` | `false` | HTTPS 部署时设为 `true` |
 | `API_TOKEN` | 空（关闭） | 为 `/api/*` 增加共享访问令牌（健康检查除外） |
 | `CORS_ORIGINS` | 本地 5173 地址 | 允许的前端来源，逗号分隔；显式设为 `*` 才放行全部 |
 
 > 安全说明：`API_TOKEN` 是单租户共享访问令牌，适合内网/受控部署，不等同于多用户登录认证；
 > 前端构建时需用 `VITE_API_TOKEN` 注入同一值。令牌会进入前端产物，公网场景应使用反向代理鉴权或登录体系。
+
+## 匿名工作区
+
+本项目默认**不需要登录**，但会为每个浏览器分配一个签名 `wa_client` Cookie：
+
+- 会话、消息、任务、Provider/Key、知识库、代码工作区全部按该 Cookie 隔离；
+- A 用 Chrome、B 用 Edge → 两套独立数据；
+- 同一浏览器/同一 Cookie → 共享一套数据；
+- 清 Cookie、换浏览器、换设备 → 会得到一个新的空工作区；
+- Cookie 被复制可以冒充；同一浏览器多人共用也会共享数据。
+
+数据落盘位置：
+
+```text
+backend/data/clients/<client_id>/
+├── chat.sqlite3        # 会话/消息/任务
+├── rag.sqlite3         # 向量库
+├── knowledge/          # 个人知识库
+├── workspace/          # 代码交付沙箱
+└── runtime_config.json # 个人 Provider/Key 配置
+```
+
+这是“浏览器级隔离”，不是多用户安全认证，也没有岗位权限、审计、跨设备同步。公司敏感数据或需要岗位权限时，仍应在反向代理/SSO 后面使用。
+
+> 升级前已有的全局 `backend/data/chat.sqlite3`、`rag.sqlite3`、`backend/knowledge` 不会自动出现在新匿名工作区中；需要保留时请先备份或手工迁移。
 
 ## 知识库
 
@@ -225,7 +254,7 @@ LLM_MODEL=deepseek-flash
 GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest、前端 vitest + 构建，以及 Docker 镜像构建。
 
 ```bash
-cd backend && .venv/bin/python -m pytest tests -q   # 后端 70 用例
+cd backend && .venv/bin/python -m pytest tests -q   # 后端 71 用例
 cd frontend && npm test                             # 前端 18 用例
 ```
 
@@ -247,7 +276,7 @@ cd frontend && npm test                             # 前端 18 用例
 | `test_agent.py` | 10 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验、SSRF 内网/重定向/IP 固定、方案依据来源校验 |
 | `test_plans.py` | 7 | 方案规范化与校验、多候选 SSE、选择互斥、单方案兼容、非法参数容错 |
 | `test_tasks.py` | 7 | 任务拆解与幂等、未确认方案拦截、文档交付、代码 diff 审批与落盘校验、绝对路径/穿越防护、任务状态守卫、文件数上限 |
-| `test_api.py` | 16 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路/多 token 事件、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式、API Token/CORS |
+| `test_api.py` | 17 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路/多 token 事件、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式、API Token/CORS、匿名工作区隔离 |
 
 真实链路（服务健康 → 配置连通 → 注入标记文档 → SSE 提问 → 断言检索命中 + 回答含标记 + 持久化 → 清理）：
 

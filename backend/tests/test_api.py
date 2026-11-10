@@ -288,3 +288,48 @@ def test_cors_defaults_reject_unknown_origin(tmp_app):
     assert "access-control-allow-origin" not in evil.headers
     local = client.get("/api/health", headers={"Origin": "http://127.0.0.1:5173"})
     assert local.headers.get("access-control-allow-origin") == "http://127.0.0.1:5173"
+
+
+def test_anonymous_workspaces_are_isolated(tmp_path, monkeypatch):
+    """不同浏览器（不同签名 Cookie）的会话、配置、知识库必须完全隔离。"""
+    import app.main as m
+
+    monkeypatch.setattr(m, "_rag", None)
+    monkeypatch.setattr(m, "_executor", None)
+    monkeypatch.setattr(m, "_provider", None)
+    monkeypatch.setattr(m, "_store", None)
+    monkeypatch.setattr(m.config, "CLIENTS_DIR", tmp_path / "clients")
+    monkeypatch.setattr(m.config, "EMBED_BACKEND", "hash")
+    monkeypatch.setattr(m.config, "SCORE_THRESHOLD", 0.0)
+    monkeypatch.setattr(m.config, "CLIENT_COOKIE_SECRET", "test-cookie-secret")
+    m._workspaces.clear()
+
+    a = TestClient(app)
+    b = TestClient(app)
+
+    sid_a = a.post("/api/sessions").json()["id"]
+    sid_b = b.post("/api/sessions").json()["id"]
+
+    # 会话/消息 API 的归属隔离（空会话不进列表，先各发一条消息）
+    a.post("/api/chat", json={"message": "A 的问题", "session_id": sid_a, "allow_fetch": False})
+    b.post("/api/chat", json={"message": "B 的问题", "session_id": sid_b, "allow_fetch": False})
+    assert [s["id"] for s in a.get("/api/sessions").json()["sessions"]] == [sid_a]
+    assert [s["id"] for s in b.get("/api/sessions").json()["sessions"]] == [sid_b]
+    assert b.get(f"/api/sessions/{sid_a}").status_code == 404
+
+    # 知识库隔离
+    a.post("/api/knowledge/text", json={"name": "仅A可见", "text": "A 的私有知识"})
+    assert any(d["source"].endswith("仅A可见.md") for d in a.get("/api/knowledge").json()["docs"])
+    assert b.get("/api/knowledge").json()["docs"] == []
+
+    # Provider/Key 配置隔离
+    a.post("/api/config", json={"base_url": "https://a.example/v1", "model": "a-model", "api_key": "sk-a"})
+    cfg_a = a.get("/api/config").json()
+    cfg_b = b.get("/api/config").json()
+    assert cfg_a["has_key"] is True
+    assert cfg_b["has_key"] is False
+    assert cfg_a["base_url"] != cfg_b["base_url"]
+
+    # 两个浏览器确实落到不同目录
+    roots = {ws.root for ws in m._workspaces.values()}
+    assert len(roots) == 2

@@ -32,8 +32,15 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-small-zh-v1.5")
 # 知识库文档目录与向量库文件
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", ROOT / "knowledge"))
 DB_PATH = Path(os.getenv("RAG_DB_PATH", ROOT / "data" / "rag.sqlite3"))
-# 任务执行的工作区（沙箱根目录）：代码类交付只允许写在这里
+# 匿名工作区根目录：每个浏览器一个独立子目录（chat/rag/knowledge/workspace/config）
+CLIENTS_DIR = Path(os.getenv("CLIENTS_DIR", DB_PATH.parent / "clients"))
+# 任务执行的工作区（测试/兼容用；生产按匿名工作区隔离）
 WORKSPACE_DIR = Path(os.getenv("WORKSPACE_DIR", ROOT / "data" / "workspace"))
+# 匿名 Cookie 签名密钥；为空时自动生成并持久化到 DB_PATH 同目录
+CLIENT_COOKIE_SECRET = os.getenv("CLIENT_COOKIE_SECRET", "").strip()
+CLIENT_COOKIE_NAME = "wa_client"
+# 是否给 Cookie 加 Secure（HTTPS 部署建议 true）
+CLIENT_COOKIE_SECURE = os.getenv("CLIENT_COOKIE_SECURE", "false").lower() == "true"
 
 # Agent
 MAX_TOOL_ROUNDS = int(os.getenv("MAX_TOOL_ROUNDS", "6"))

@@ -40,7 +40,7 @@ flowchart LR
 | 工具调用 | `search_knowledge` / `fetch_url`，最多 6 轮工具循环，思考模型 `reasoning_content` 兼容 |
 | 过程可观测 | SSE 事件流（tool_call / tool_result / token / done / error）+ 前端工具时间线 |
 | 来源追溯 | 回答标注来源文件，前端可展开查看检索到的原文片段 |
-| 质量保障 | 70 个 pytest 用例（含后续阶段）+ 18 个前端用例 + 真实链路端到端验证脚本 |
+| 质量保障 | 71 个 pytest 用例（含后续阶段）+ 18 个前端用例 + 真实链路端到端验证脚本 |
 
 **验收**：可对任意入库文档提问，回答包含来源标注，无关问题如实拒答。已验证通过。
 
@@ -168,7 +168,7 @@ flowchart LR
 
 | 层 | 用例数 | 命令 | 覆盖范围 |
 |---|---|---|---|
-| 后端（pytest） | 70 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
+| 后端（pytest） | 71 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
 | 前端（vitest + Testing Library） | 18 | `cd frontend && npm test` | api 请求契约、方案卡片与多方案对比表、任务看板（拆解/执行/diff 审批）、Composer 交互 |
 | 真实链路（脚本） | 端到端 | `cd backend && .venv/bin/python scripts/verify_real.py` | 真实模型 + RAG 检索 + SSE + 持久化 |
 

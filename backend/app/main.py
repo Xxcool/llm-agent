@@ -4,8 +4,11 @@ import hmac
 import io
 import json
 import re
+import secrets
 import shutil
 import time
+import uuid
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -18,6 +21,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from . import config
 from .agent import run_agent
+from .embedder import get_embedder
 from .llm import BaseProvider, MockProvider, OpenAICompatProvider
 from .rag import RagStore
 from .store import ChatStore
@@ -50,38 +54,95 @@ app.add_middleware(
     allow_origins=config.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 KNOWLEDGE_ROOT = Path(config.KNOWLEDGE_DIR)
 UPLOAD_DIR = KNOWLEDGE_ROOT / "uploads"
 RUNTIME_FILE = Path(config.DB_PATH).parent / "runtime_config.json"
 
+# 测试/兼容用的全局覆盖；生产环境保持 None，按匿名 client 创建独立工作区
 _rag: Optional[RagStore] = None
 _executor: Optional[ToolExecutor] = None
 _provider: Optional[BaseProvider] = None
 _store: Optional[ChatStore] = None
 
+_CLIENT_CTX: ContextVar[Optional[str]] = ContextVar("client_id", default=None)
+_workspaces: dict[str, "Workspace"] = {}
+_health_cache: dict[str, dict] = {}
+_shared_embedder = None
+_HEALTH_TTL = 60.0  # 秒：模型探测有真实开销，结果缓存 1 分钟
 
-def _load_runtime() -> dict:
-    if RUNTIME_FILE.exists():
+
+def _current_client() -> str:
+    return _CLIENT_CTX.get() or "anonymous"
+
+
+def _client_root(client_id: Optional[str] = None) -> Path:
+    return Path(config.CLIENTS_DIR) / (client_id or _current_client())
+
+
+def _cookie_secret() -> bytes:
+    if config.CLIENT_COOKIE_SECRET:
+        return config.CLIENT_COOKIE_SECRET.encode("utf-8")
+    path = Path(config.DB_PATH).parent / "client_cookie_secret"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(secrets.token_hex(32), encoding="utf-8")
         try:
-            return json.loads(RUNTIME_FILE.read_text(encoding="utf-8"))
+            path.chmod(0o600)
+        except OSError:
+            pass
+    return path.read_text(encoding="utf-8").strip().encode("utf-8")
+
+
+def _encode_client_cookie(client_id: str) -> str:
+    sig = hmac.new(_cookie_secret(), client_id.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{client_id}.{sig}"
+
+
+def _decode_client_cookie(value: Optional[str]) -> Optional[str]:
+    if not value or "." not in value:
+        return None
+    client_id, sig = value.rsplit(".", 1)
+    if not re.fullmatch(r"[a-f0-9]{32}", client_id):
+        return None
+    expected = hmac.new(_cookie_secret(), client_id.encode("utf-8"), hashlib.sha256).hexdigest()
+    return client_id if hmac.compare_digest(sig, expected) else None
+
+
+def _runtime_file(client_id: Optional[str] = None) -> Path:
+    # 测试 fixture 注入全局 _store 时仍使用原来的单文件路径
+    if _store is not None:
+        return RUNTIME_FILE
+    return _client_root(client_id) / "runtime_config.json"
+
+
+def _load_runtime(client_id: Optional[str] = None) -> dict:
+    path = _runtime_file(client_id)
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001 配置文件损坏时按未配置处理
             return {}
     return {}
 
 
-def _save_runtime(cfg: dict) -> None:
-    RUNTIME_FILE.parent.mkdir(parents=True, exist_ok=True)
-    RUNTIME_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+def _save_runtime(cfg: dict, client_id: Optional[str] = None) -> None:
+    path = _runtime_file(client_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        path.chmod(0o600)  # API Key 至少不落成全局可读
+    except OSError:
+        pass
 
 
-def _make_provider() -> BaseProvider:
-    """优先用运行时配置（前端设置面板），否则按环境变量；无 Key 时降级 Mock 演示模式。"""
-    # LLM_PROVIDER=mock 时强制离线，避免环境里残留的 Key 让演示模式意外发起真实调用
+def _make_provider(client_id: Optional[str] = None) -> BaseProvider:
+    """优先用当前匿名工作区的运行时配置，否则按环境变量；无 Key 时 Mock。"""
     if config.LLM_PROVIDER == "mock":
         return MockProvider()
-    rt = _load_runtime()
+    rt = _load_runtime(client_id)
     base_url = rt.get("base_url") or config.LLM_BASE_URL
     api_key = rt.get("api_key") or config.LLM_API_KEY
     model = rt.get("model") or config.LLM_MODEL
@@ -90,15 +151,101 @@ def _make_provider() -> BaseProvider:
     return MockProvider()
 
 
+class Workspace:
+    """一个匿名浏览器的独立数据空间。"""
+
+    def __init__(self, client_id: str):
+        self.client_id = client_id
+        self.root = _client_root(client_id)
+        self.knowledge_root = self.root / "knowledge"
+        self.upload_dir = self.knowledge_root / "uploads"
+        self.workspace_dir = self.root / "workspace"
+        for path in (self.knowledge_root, self.workspace_dir):
+            path.mkdir(parents=True, exist_ok=True)
+        self.store = ChatStore(self.root / "chat.sqlite3")
+        global _shared_embedder
+        if _shared_embedder is None:
+            _shared_embedder = get_embedder()
+        self.rag = RagStore(self.root / "rag.sqlite3", embedder=_shared_embedder)
+        n = self.rag.ingest_dir(self.knowledge_root)
+        if n:
+            print(f"[rag:{client_id[:8]}] 知识库索引就绪，共 {n} 个分块")
+        self.executor = ToolExecutor(self.rag, boost_fn=lambda: self.store.source_boosts())
+        self.provider = _make_provider(client_id)
+
+
+def _workspace(client_id: Optional[str] = None) -> Workspace:
+    cid = client_id or _current_client()
+    if cid not in _workspaces:
+        _workspaces[cid] = Workspace(cid)
+    return _workspaces[cid]
+
+
+def _ensure_store() -> ChatStore:
+    if _store is not None:  # 测试 fixture 注入
+        return _store
+    return _workspace().store
+
+
 def _ensure_state() -> RagStore:
-    global _rag, _executor, _provider
-    if _rag is None:
-        _rag = RagStore()
-        n = _rag.ingest_dir(KNOWLEDGE_ROOT)
-        print(f"[rag] 知识库索引就绪，共 {n} 个分块")
-        _executor = ToolExecutor(_rag, boost_fn=lambda: _ensure_store().source_boosts())
-        _provider = _make_provider()
-    return _rag
+    if _rag is not None:  # 测试 fixture 注入
+        return _rag
+    return _workspace().rag
+
+
+def _get_provider() -> BaseProvider:
+    if _provider is not None:  # 测试 fixture 注入
+        return _provider
+    return _workspace().provider
+
+
+def _get_executor() -> ToolExecutor:
+    if _executor is not None:  # 测试 fixture 注入
+        return _executor
+    return _workspace().executor
+
+
+def _knowledge_root() -> Path:
+    if _rag is not None:  # 测试 fixture 注入
+        return KNOWLEDGE_ROOT
+    return _workspace().knowledge_root
+
+
+def _upload_dir() -> Path:
+    if _rag is not None:  # 测试 fixture 注入
+        return UPLOAD_DIR
+    return _workspace().upload_dir
+
+
+def _workspace_dir(session_id: str) -> Path:
+    if _rag is not None:  # 测试 fixture 注入
+        return Path(config.WORKSPACE_DIR) / session_id
+    return _workspace().workspace_dir / session_id
+
+
+@app.middleware("http")
+async def anonymous_workspace(request, call_next):
+    """给每个浏览器分配签名 client_id，所有 API 数据按该工作区隔离。"""
+    raw = request.cookies.get(config.CLIENT_COOKIE_NAME)
+    client_id = _decode_client_cookie(raw)
+    new_client = client_id is None
+    if new_client:
+        client_id = uuid.uuid4().hex
+    token = _CLIENT_CTX.set(client_id)
+    try:
+        response = await call_next(request)
+    finally:
+        _CLIENT_CTX.reset(token)
+    if new_client:
+        response.set_cookie(
+            config.CLIENT_COOKIE_NAME,
+            _encode_client_cookie(client_id),
+            max_age=365 * 24 * 3600,
+            httponly=True,
+            samesite="lax",
+            secure=config.CLIENT_COOKIE_SECURE,
+        )
+    return response
 
 
 class ChatIn(BaseModel):
@@ -115,33 +262,30 @@ class ConfigIn(BaseModel):
     model: Optional[str] = None
 
 
-_health_cache: dict = {"ts": 0.0, "data": None}
-_HEALTH_TTL = 60.0  # 秒：模型探测有真实开销，结果缓存 1 分钟
-
-
 @app.get("/api/health")
 def health():
-    _ensure_state()
-    import time
+    state = _ensure_state()
+    provider = _get_provider()
+    cache = _health_cache.setdefault(_current_client(), {"ts": 0.0, "data": None})
 
     now = time.time()
-    if _health_cache["data"] and now - _health_cache["ts"] < _HEALTH_TTL:
-        return _health_cache["data"]
+    if cache["data"] and now - cache["ts"] < _HEALTH_TTL:
+        return cache["data"]
 
-    chunks = _rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    chunks = state.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     rt = _load_runtime()
     data = {
         "status": "ok",
-        "provider": _provider.name,
+        "provider": provider.name,
         "model": rt.get("model") or config.LLM_MODEL,
         "chunks": chunks,
         # API 地址非敏感（不含 Key），前端据此识别服务商品牌并展示
         "base_url": rt.get("base_url") or config.LLM_BASE_URL,
     }
-    if _provider.name == "openai":
+    if provider.name == "openai":
         # 真实探测：只看「模型服务现在能不能用」，欠费/无效 Key 都会在这里暴露
         try:
-            _provider.chat([{"role": "user", "content": "ping"}])
+            provider.chat([{"role": "user", "content": "ping"}])
             data["ok"] = True
         except Exception as e:  # noqa: BLE001
             from .agent import _provider_error_message
@@ -150,8 +294,8 @@ def health():
             data["error"] = _provider_error_message(e)
     else:
         data["ok"] = True
-    _health_cache["ts"] = now
-    _health_cache["data"] = data
+    cache["ts"] = now
+    cache["data"] = data
     return data
 
 
@@ -205,7 +349,7 @@ async def tts(text: str, voice: Optional[str] = None):
 @app.get("/api/config")
 def get_config():
     rt = _load_runtime()
-    _ensure_state()
+    provider = _get_provider()
     key = rt.get("api_key") or config.LLM_API_KEY
     # 只回传掩码，不回传明文 Key
     if key and len(key) > 8:
@@ -215,7 +359,7 @@ def get_config():
     else:
         masked = None
     return {
-        "provider": _provider.name,
+        "provider": provider.name,
         "base_url": rt.get("base_url") or config.LLM_BASE_URL,
         "model": rt.get("model") or config.LLM_MODEL,
         "has_key": bool(key),
@@ -234,9 +378,15 @@ def set_config(body: ConfigIn):
         rt["api_key"] = body.api_key.strip()
     _save_runtime(rt)
     global _provider
-    _provider = _make_provider()
-    _health_cache["ts"] = 0.0  # 配置变更后立即重新探测
-    return {"status": "ok", "provider": _provider.name}
+    if _provider is not None:  # 测试 fixture 注入
+        _provider = _make_provider()
+    else:
+        workspace = _workspace()
+        workspace.provider = _make_provider()
+    cache = _health_cache.setdefault(_current_client(), {"ts": 0.0, "data": None})
+    cache["ts"] = 0.0  # 配置变更后立即重新探测
+    cache["data"] = None
+    return {"status": "ok", "provider": _get_provider().name}
 
 
 class ConfigTestIn(BaseModel):
@@ -267,21 +417,22 @@ def test_config(body: ConfigTestIn):
 
 @app.get("/api/knowledge")
 def list_knowledge():
-    _ensure_state()
-    docs = [{"source": src, "chunks": n} for src, n in _rag.sources()]
+    rag = _ensure_state()
+    docs = [{"source": src, "chunks": n} for src, n in rag.sources()]
     return {"docs": docs}
 
 
 @app.get("/api/knowledge/health")
 def knowledge_health():
     """知识健康度：文档/分块/归档数量、陈旧文档、缺失文件。"""
-    _ensure_state()
+    rag = _ensure_state()
+    root = _knowledge_root()
     now = time.time()
     stale = []
     missing = []
-    sources = _rag.sources()
+    sources = rag.sources()
     for source, _chunks in sources:
-        path = KNOWLEDGE_ROOT / source
+        path = root / source
         if not path.is_file():
             missing.append(source)
             continue
@@ -302,11 +453,11 @@ def knowledge_health():
 @app.get("/api/knowledge/reuse")
 def knowledge_reuse(q: str, limit: int = 3):
     """复用推荐：从历史归档（沉淀/）中检索相似交付物。"""
-    _ensure_state()
+    rag = _ensure_state()
     if not q.strip():
         raise HTTPException(400, "查询不能为空")
     limit = max(1, min(limit, 10))
-    hits = _rag.search(q, top_k=30, boosts=_ensure_store().source_boosts())
+    hits = rag.search(q, top_k=30, boosts=_ensure_store().source_boosts())
     items = [
         {"source": src, "quote": text[:300], "score": score}
         for src, text, score in hits
@@ -323,17 +474,19 @@ class TextDocIn(BaseModel):
 @app.post("/api/knowledge/upload")
 async def upload_knowledge(file: UploadFile = File(...)):
     """上传 md/txt/markdown 文件。"""
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    root = _knowledge_root()
+    upload = _upload_dir()
+    upload.mkdir(parents=True, exist_ok=True)
     if not file.filename.lower().endswith((".md", ".txt", ".markdown")):
         raise HTTPException(400, "仅支持 .md / .txt / .markdown 文件")
     safe = re.sub(r"[^\w.\-\u4e00-\u9fff]", "_", file.filename)
-    target = UPLOAD_DIR / safe
+    target = upload / safe
     with target.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     rag = _ensure_state()
-    rag.ingest_dir(KNOWLEDGE_ROOT)
+    rag.ingest_dir(root)
     total = rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    return {"status": "ok", "saved": str(target.relative_to(KNOWLEDGE_ROOT)), "total_chunks": total}
+    return {"status": "ok", "saved": str(target.relative_to(root)), "total_chunks": total}
 
 
 @app.post("/api/knowledge/upload-dir")
@@ -348,8 +501,10 @@ async def upload_knowledge_dir(
     """
     if len(files) != len(paths):
         raise HTTPException(400, "files 与 paths 数量不一致")
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    upload_root = UPLOAD_DIR.resolve()
+    root = _knowledge_root()
+    upload = _upload_dir()
+    upload.mkdir(parents=True, exist_ok=True)
+    upload_root = upload.resolve()
     saved: List[str] = []
     skipped: List[str] = []
     for f, rel in zip(files, paths):
@@ -359,16 +514,16 @@ async def upload_knowledge_dir(
         if ".." in rel.split("/") or not rel.lower().endswith((".md", ".txt", ".markdown")):
             skipped.append(rel)
             continue
-        target = (UPLOAD_DIR / rel).resolve()
+        target = (upload / rel).resolve()
         if upload_root != target and upload_root not in target.parents:
             skipped.append(rel)  # 越界路径防护
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("wb") as fp:
             shutil.copyfileobj(f.file, fp)
-        saved.append(str(target.relative_to(KNOWLEDGE_ROOT)))
+        saved.append(str(target.relative_to(root)))
     rag = _ensure_state()
-    rag.ingest_dir(KNOWLEDGE_ROOT)
+    rag.ingest_dir(root)
     total = rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     return {"status": "ok", "saved": saved, "skipped": skipped, "total_chunks": total}
 
@@ -376,16 +531,18 @@ async def upload_knowledge_dir(
 @app.post("/api/knowledge/text")
 async def add_knowledge_text(body: TextDocIn):
     """直接粘贴文本建文档。"""
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    root = _knowledge_root()
+    upload = _upload_dir()
+    upload.mkdir(parents=True, exist_ok=True)
     safe = re.sub(r"[^\w.\-\u4e00-\u9fff]", "_", body.name)
     if not safe.endswith((".md", ".txt")):
         safe += ".md"
-    target = UPLOAD_DIR / safe
+    target = upload / safe
     target.write_text(body.text, encoding="utf-8")
     rag = _ensure_state()
-    rag.ingest_dir(KNOWLEDGE_ROOT)
+    rag.ingest_dir(root)
     total = rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    return {"status": "ok", "saved": str(target.relative_to(KNOWLEDGE_ROOT)), "total_chunks": total}
+    return {"status": "ok", "saved": str(target.relative_to(root)), "total_chunks": total}
 
 
 class UrlImportIn(BaseModel):
@@ -400,7 +557,9 @@ def import_urls(body: UrlImportIn):
         raise HTTPException(400, "至少提供一个链接")
     if len(urls) > 10:
         raise HTTPException(400, "单次最多导入 10 个链接")
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    root = _knowledge_root()
+    upload = _upload_dir()
+    upload.mkdir(parents=True, exist_ok=True)
     rag = _ensure_state()
     saved: list = []
     failed: list = []
@@ -413,12 +572,12 @@ def import_urls(body: UrlImportIn):
             slug = m.group(1) if m else hashlib.md5(url.encode()).hexdigest()[:8]
             host = re.sub(r"^www\.", "", url.split("/")[2])
             filename = re.sub(r"[^\w.\-]", "_", f"{host}_{slug}.md")
-            target = UPLOAD_DIR / filename
+            target = upload / filename
             target.write_text(f"# 来源：{url}\n\n{text}", encoding="utf-8")
-            saved.append(str(target.relative_to(KNOWLEDGE_ROOT)))
+            saved.append(str(target.relative_to(root)))
         except Exception as e:  # noqa: BLE001 单条失败不影响其他
             failed.append({"url": url, "error": f"{e.__class__.__name__}: {e}"})
-    rag.ingest_dir(KNOWLEDGE_ROOT)
+    rag.ingest_dir(root)
     total = rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     return {"status": "ok", "saved": saved, "failed": failed, "total_chunks": total}
 
@@ -426,28 +585,21 @@ def import_urls(body: UrlImportIn):
 @app.delete("/api/knowledge")
 def delete_knowledge(source: str):
     """按相对路径删除文档（同时删文件与已入库分块）。"""
-    _ensure_state()
-    root = KNOWLEDGE_ROOT.resolve()
-    target = (KNOWLEDGE_ROOT / source).resolve()
+    rag = _ensure_state()
+    root = _knowledge_root().resolve()
+    target = (root / source).resolve()
     # 必须用路径语义判断，不能用 startswith：knowledge_evil/ 会绕过前缀检查
     if not source.strip() or not target.is_relative_to(root):
         raise HTTPException(400, "非法路径")
     if target == root or target.is_dir():
         raise HTTPException(400, "只能删除知识库中的文件")
-    removed = _rag.delete_source(source)
+    removed = rag.delete_source(source)
     if target.is_file():
         target.unlink()
     return {"status": "ok", "removed_chunks": removed}
 
 
 # ---------- 会话管理 ----------
-
-def _ensure_store() -> ChatStore:
-    global _store
-    if _store is None:
-        _store = ChatStore()
-    return _store
-
 
 @app.post("/api/sessions")
 def create_session():
@@ -581,6 +733,7 @@ def breakdown_tasks(mid: int, body: TaskBreakdownIn):
     from .tasks import breakdown_prompt, normalize_tasks, parse_json_array
 
     _ensure_state()  # 直接调 API（未经 /api/health）时也要先初始化 provider
+    provider = _get_provider()
     store = _ensure_store()
     msg = store.get_message(mid)
     if not msg:
@@ -591,7 +744,7 @@ def breakdown_tasks(mid: int, body: TaskBreakdownIn):
         return {"tasks": existing, "cached": True}
 
     try:
-        resp = _provider.chat([{"role": "user", "content": breakdown_prompt(plan)}])
+        resp = provider.chat([{"role": "user", "content": breakdown_prompt(plan)}])
         tasks = normalize_tasks(parse_json_array(resp.content), plan["id"])
     except Exception as e:  # noqa: BLE001 拆解失败以人话返回
         from .agent import _provider_error_message
@@ -608,6 +761,7 @@ def run_task(tid: int):
     from .agent import _provider_error_message
     from .tasks import build_diffs, code_run_prompt, parse_code_files, run_prompt
 
+    provider = _get_provider()
     store = _ensure_store()
     task = store.get_task(tid)
     if not task:
@@ -637,9 +791,9 @@ def run_task(tid: int):
     try:
         if task.get("kind") == "code":
             # 代码类：产出文件 → diff → 等人工批准（不自动落盘）
-            resp = _provider.chat([{"role": "user", "content": code_run_prompt(plan, task, context)}])
+            resp = provider.chat([{"role": "user", "content": code_run_prompt(plan, task, context)}])
             parsed = parse_code_files(resp.content or "")
-            root = Path(config.WORKSPACE_DIR) / task["session_id"]
+            root = _workspace_dir(task["session_id"])
             diffs = build_diffs(root, parsed["files"])
             # 待审批的文件内容暂存在 files 字段（含 diff 与全文），批准后才写盘
             updated = store.update_task(
@@ -647,7 +801,7 @@ def run_task(tid: int):
             )
             return {"status": "ok", "task": updated}
 
-        resp = _provider.chat([{"role": "user", "content": run_prompt(plan, task, context)}])
+        resp = provider.chat([{"role": "user", "content": run_prompt(plan, task, context)}])
         artifact = (resp.content or "").strip()
         if not artifact:
             raise RuntimeError("模型未返回交付内容")
@@ -672,7 +826,7 @@ def apply_task_files(tid: int):
     files = task.get("files") or []
     if not files:
         raise HTTPException(status_code=400, detail="该任务没有待落盘文件")
-    root = Path(config.WORKSPACE_DIR) / task["session_id"]
+    root = _workspace_dir(task["session_id"])
     try:
         written = apply_files(root, files)
     except Exception as e:  # noqa: BLE001 路径越界等安全问题
@@ -695,8 +849,9 @@ def archive_task(tid: int):
     if task.get("status") != "done":
         raise HTTPException(status_code=400, detail="只有已完成任务可以归档")
 
+    root = _knowledge_root()
     existing = task.get("archive_path")
-    if existing and (KNOWLEDGE_ROOT / existing).is_file():
+    if existing and (root / existing).is_file():
         return {"status": "ok", "cached": True, "source": existing, "task": task}
 
     msg = store.get_message(task["message_id"])
@@ -704,10 +859,10 @@ def archive_task(tid: int):
     if msg:
         plan = next((p for p in (msg.get("plans") or []) if p.get("id") == task["plan_id"]), None)
     rel = archive_relpath(task)
-    target = KNOWLEDGE_ROOT / rel
+    target = root / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(archive_markdown(task, plan), encoding="utf-8")
-    _ensure_state().ingest_dir(KNOWLEDGE_ROOT)
+    _ensure_state().ingest_dir(root)
     updated = store.update_task(tid, "done", archive_path=rel)
     return {"status": "ok", "cached": False, "source": rel, "task": updated}
 
@@ -730,6 +885,8 @@ def discard_task_files(tid: int):
 @app.post("/api/chat")
 def chat(body: ChatIn):
     _ensure_state()
+    provider = _get_provider()
+    executor = _get_executor()
     store = _ensure_store()
     history: list = []
 
@@ -745,7 +902,7 @@ def chat(body: ChatIn):
         plans: list = []
         error_text: str | None = None
         for event in run_agent(
-            _provider, _executor, body.message,
+            provider, executor, body.message,
             history=history,
             force_retrieval=body.force_retrieval,
             allow_fetch=body.allow_fetch,
