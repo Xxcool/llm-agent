@@ -69,7 +69,9 @@ export function TaskBoard({
     setError('')
     try {
       const r = await applyTask(task.id)
-      onTasks(tasks.map((t) => (t.id === task.id ? r.task : t)))
+      // 校验结果以响应为准（即便 task 未携带 checks 也能展示）
+      const merged = { ...r.task, checks: r.checks }
+      onTasks(tasks.map((t) => (t.id === task.id ? merged : t)))
       const failed = r.checks.filter((c) => !c.ok)
       if (failed.length) setError(`已落盘，但 ${failed.length} 个文件校验未通过：${failed[0].detail}`)
     } catch (e) {

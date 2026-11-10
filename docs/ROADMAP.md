@@ -148,7 +148,17 @@ flowchart LR
 
 ---
 
-## 三、里程碑概览
+## 三、测试覆盖现状
+
+| 层 | 用例数 | 命令 | 覆盖范围 |
+|---|---|---|---|
+| 后端（pytest） | 50 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
+| 前端（vitest + Testing Library） | 17 | `cd frontend && npm test` | api 请求契约、方案卡片与多方案对比表、任务看板（拆解/执行/diff 审批）、Composer 交互 |
+| 真实链路（脚本） | 端到端 | `cd backend && .venv/bin/python scripts/verify_real.py` | 真实模型 + RAG 检索 + SSE + 持久化 |
+
+CI：`.github/workflows/ci.yml` 在每次 push / PR 自动执行后端 pytest、前端 vitest 与前端构建。
+
+## 四、里程碑概览
 
 | 里程碑 | 内容 | 依赖 | 预计 |
 |---|---|---|---|
@@ -159,7 +169,7 @@ flowchart LR
 | M5 | P4 产物归档 + 自动复盘 | M3 | 后期 |
 | M6 | 反馈驱动的检索与方案优化 | M5 | 后期 |
 
-## 四、设计原则
+## 五、设计原则
 
 1. **证据优先**：方案中的每条结论都必须能溯源到知识库片段或明确的用户输入，禁止无依据编造
 2. **人在回路**（human-in-the-loop）：规划与写操作均需人工确认；自动化程度随信任度逐步放开
@@ -167,7 +177,7 @@ flowchart LR
 4. **安全边界**：执行类操作在沙箱内、有白名单、可回滚；Key 永不回传明文
 5. **知识飞轮**：每一次交付都要让知识库变强，而不是消耗它
 
-## 五、非目标（明确不做）
+## 六、非目标（明确不做）
 
 - 不做通用聊天助手（定位是企业知识驱动的交付平台，闲聊不是主场景）
 - 不做完全无人值守的全自动开发（关键节点必须人工确认）

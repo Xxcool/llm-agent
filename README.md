@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-50%20passed-3fb950)](backend/tests)
+[![Tests](https://img.shields.io/badge/tests-67%20passed-3fb950)](.github/workflows/ci.yml)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
 
@@ -209,11 +209,23 @@ LLM_MODEL=deepseek-flash
 
 ## 测试
 
-两层验证：**离线单测**（不需要模型 Key）与**真实链路端到端验证**（需要可用 Key）。
+三层验证：**后端单测**、**前端单测**、**真实链路端到端验证**（需要可用 Key）。
+GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest 与前端 vitest + 构建。
 
 ```bash
-cd backend && .venv/bin/python -m pytest tests -q
+cd backend && .venv/bin/python -m pytest tests -q   # 后端 50 用例
+cd frontend && npm test                             # 前端 17 用例
 ```
+
+前端用例（Vitest + Testing Library，jsdom）：
+
+| 文件 | 用例数 | 覆盖点 |
+|---|---|---|
+| `api.test.ts` | 4 | 方案状态 PATCH 参数（status + plan_id）、任务拆解错误文案透出、执行/落盘响应解析 |
+| `PlanGroup.test.tsx` | 2 | 单方案直出卡片、多方案对比表（表头维度、推荐/已选/驳回行） |
+| `PlanCard.test.tsx` | 4 | 依据溯源渲染、确认按钮按 plan.id 提交、未落库禁用、多方案折叠与「恢复为候选」 |
+| `TaskBoard.test.tsx` | 4 | 拆解入口、执行后展示交付物、代码任务 diff + 批准落盘回传校验、丢弃 |
+| `Composer.test.tsx` | 3 | 回车发送与清空、方案模式开关态、禁用时停止按钮 |
 
 | 模块 | 用例数 | 覆盖点 |
 |---|---|---|
