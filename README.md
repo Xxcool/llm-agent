@@ -21,11 +21,16 @@
 |---|---|
 | ![知识库](docs/screenshots/knowledge.png) | ![模型接入](docs/screenshots/settings.png) |
 
+| 方案模式 · 结构化方案卡片（P2 规划层） |
+|---|
+| ![方案卡片](docs/screenshots/plan.png) |
+
 ## 功能特性
 
 | 能力 | 说明 |
 |---|---|
 | **RAG 检索增强** | 段落感知分块（500 字符 / 50 重叠）→ 本地 bge-small-zh 向量化 → 余弦 Top-4 检索，相似度阈值 0.58 防硬凑；回答标注来源文件，可回溯原文 |
+| **方案模式（P2）** | 基于检索证据生成结构化方案卡片：目标 / 实施步骤 / **可溯源依据** / 风险与应对；方案需**人工确认**后才锁定，未确认不触发任何执行 |
 | **Function Calling** | 智能体按需调用 `search_knowledge`（知识库检索）与 `fetch_url`（网页正文抓取），工具结果回填后继续推理，最多 6 轮闭环 |
 | **SSE 流式输出** | 前端用 `fetch + ReadableStream` 自行解析 SSE（POST 场景，不用 EventSource），打字机式渲染 |
 | **思考型模型兼容** | 适配 DeepSeek 等思考模型：工具调用轮回传 `reasoning_content`，避免 400 |
@@ -178,6 +183,7 @@ LLM_MODEL=deepseek-flash
 | GET | `/api/sessions/{id}/messages` | 会话消息（含工具调用步骤与反馈） |
 | DELETE | `/api/sessions/{id}` | 删除会话 |
 | POST | `/api/messages/{id}/feedback` | 消息反馈（点赞 / 点踩 + 原因） |
+| PATCH | `/api/messages/{id}/plan` | 方案状态流转（`draft` / `confirmed` / `rejected`），人工确认闸门 |
 | GET/POST | `/api/config` | 读取 / 更新模型服务配置（Key 掩码回显，永不返回明文） |
 | POST | `/api/config/test` | 真实调用一次模型验证配置（不落盘） |
 | GET | `/api/knowledge` | 文档列表（含分块数） |
@@ -274,7 +280,7 @@ llm-agent
 | 阶段 | 目标 | 状态 |
 |---|---|---|
 | P1 感知 · 检索 | 文档入库、语义检索、来源追溯、工具调用可观测 | ✅ 已完成 |
-| P2 规划 · 方案 | 基于检索证据生成结构化方案（背景/依据/步骤/风险），人工确认闸门 | 🚧 下一步 |
+| P2 规划 · 方案 | 基于检索证据生成结构化方案（背景/依据/步骤/风险），人工确认闸门 | 🚧 M1 已完成（方案卡片 + 确认闸门），M2 多方案对比待做 |
 | P3 行动 · 执行 | 方案拆解为任务 DAG 并逐项执行，产出可校验交付物（diff 审批 + 沙箱） | 📋 规划中 |
 | P4 记忆 · 沉淀 | 交付物归档回知识库，形成组织记忆飞轮 | 📋 规划中 |
 

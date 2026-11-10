@@ -9,8 +9,10 @@ export function Composer({
   autoFocusInput = false,
   knowledgeOn,
   webOn,
+  planMode = false,
   onToggleKnowledge,
   onToggleWeb,
+  onTogglePlan,
 }: {
   disabled: boolean
   onSend: (text: string) => void
@@ -19,8 +21,11 @@ export function Composer({
   autoFocusInput?: boolean
   knowledgeOn: boolean
   webOn: boolean
+  /** 方案模式：强制输出结构化方案（依据 + 步骤 + 风险） */
+  planMode?: boolean
   onToggleKnowledge: () => void
   onToggleWeb: () => void
+  onTogglePlan?: () => void
 }) {
   const [text, setText] = useState('')
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -62,6 +67,20 @@ export function Composer({
         />
         <div className="composer-bar">
           <div className="composer-chips">
+            {onTogglePlan && (
+              <button
+                type="button"
+                className={`chip plan-chip-toggle ${planMode ? 'active' : ''}`}
+                onClick={onTogglePlan}
+                title={planMode ? '已开启：基于知识库证据生成结构化方案（含步骤与风险）' : '已关闭：普通问答模式'}
+              >
+                <svg viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path d="M3 2.6h10v10.8H3z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                  <path d="M5.4 6h5.2M5.4 8.4h5.2M5.4 10.8h3.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                </svg>
+                方案模式
+              </button>
+            )}
             <button
               type="button"
               className={`chip ${knowledgeOn ? 'active' : ''}`}

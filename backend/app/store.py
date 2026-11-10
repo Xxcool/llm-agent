@@ -51,6 +51,11 @@ class ChatStore:
             with self._lock:
                 self.conn.execute("ALTER TABLE messages ADD COLUMN feedback TEXT")
                 self.conn.commit()
+        # 旧库迁移：messages 补 plan 列（结构化方案 JSON，含确认状态）
+        if "plan" not in mcols:
+            with self._lock:
+                self.conn.execute("ALTER TABLE messages ADD COLUMN plan TEXT")
+                self.conn.commit()
 
     def create_session(self, title: str = "新会话") -> dict:
         sid = uuid.uuid4().hex[:12]
@@ -112,7 +117,7 @@ class ChatStore:
     def get_messages(self, sid: str) -> List[dict]:
         with self._lock:
             rows = self.conn.execute(
-                "SELECT id, role, content, steps, feedback, created_at "
+                "SELECT id, role, content, steps, feedback, plan, created_at "
                 "FROM messages WHERE session_id=? ORDER BY id",
                 (sid,),
             ).fetchall()
@@ -125,7 +130,8 @@ class ChatStore:
                 "content": r[2],
                 "steps": json.loads(r[3] or "[]"),
                 "feedback": json.loads(r[4]) if r[4] else None,
-                "created_at": r[5],
+                "plan": json.loads(r[5]) if r[5] else None,
+                "created_at": r[6],
             }
             for r in rows
         ]
@@ -142,14 +148,64 @@ class ChatStore:
             self.conn.commit()
         return cur.rowcount > 0
 
-    def add_message(self, sid: str, role: str, content: str, steps: Optional[list] = None) -> None:
+    def get_message(self, mid: int) -> Optional[dict]:
+        """单条消息（含方案），用于方案状态更新的入参校验。"""
+        import json
+
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT id, role, content, steps, feedback, plan, created_at FROM messages WHERE id=?",
+                (mid,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row[0],
+            "role": row[1],
+            "content": row[2],
+            "steps": json.loads(row[3] or "[]"),
+            "feedback": json.loads(row[4]) if row[4] else None,
+            "plan": json.loads(row[5]) if row[5] else None,
+            "created_at": row[6],
+        }
+
+    def update_plan(self, mid: int, plan: dict) -> Optional[dict]:
+        """覆盖某条消息的方案 JSON（确认 / 驳回 / 编辑步骤）。返回最新方案。"""
+        import json
+
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE messages SET plan=? WHERE id=?",
+                (json.dumps(plan, ensure_ascii=False), mid),
+            )
+            self.conn.commit()
+        if cur.rowcount == 0:
+            return None
+        return plan
+
+    def add_message(
+        self,
+        sid: str,
+        role: str,
+        content: str,
+        steps: Optional[list] = None,
+        plan: Optional[dict] = None,
+    ) -> None:
         import json
 
         now = _now()
         with self._lock:
             self.conn.execute(
-                "INSERT INTO messages (session_id, role, content, steps, created_at) VALUES (?,?,?,?,?)",
-                (sid, role, content, json.dumps(steps or [], ensure_ascii=False), now),
+                "INSERT INTO messages (session_id, role, content, steps, plan, created_at) "
+                "VALUES (?,?,?,?,?,?)",
+                (
+                    sid,
+                    role,
+                    content,
+                    json.dumps(steps or [], ensure_ascii=False),
+                    json.dumps(plan, ensure_ascii=False) if plan else None,
+                    now,
+                ),
             )
             # 首条用户消息作为会话标题
             if role == "user":

@@ -35,6 +35,68 @@ TOOLS_SCHEMA = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "draft_plan",
+            "description": (
+                "生成结构化解决方案。当用户需要方案、建议、实施路径、落地步骤、"
+                "「怎么做/如何推进」时调用此工具，而不是直接输出一段文字。"
+                "调用前必须先用 search_knowledge 检索依据；evidence 中的每条都必须来自检索结果，"
+                "source 填来源文件名，quote 摘录原文关键句，禁止编造来源。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "方案标题（简短，体现目标）"},
+                    "background": {"type": "string", "description": "背景与现状，说明为什么需要这个方案"},
+                    "goal": {"type": "string", "description": "目标与预期结果（可衡量更好）"},
+                    "steps": {
+                        "type": "array",
+                        "description": "实施步骤（有序）",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string", "description": "步骤标题"},
+                                "detail": {"type": "string", "description": "具体做法与产出"},
+                            },
+                            "required": ["title"],
+                        },
+                    },
+                    "evidence": {
+                        "type": "array",
+                        "description": "方案依据（来自知识库检索结果）",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "source": {"type": "string", "description": "来源文件名/相对路径"},
+                                "quote": {"type": "string", "description": "原文关键句摘录"},
+                            },
+                            "required": ["source"],
+                        },
+                    },
+                    "risks": {
+                        "type": "array",
+                        "description": "风险与应对",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "risk": {"type": "string", "description": "风险点"},
+                                "mitigation": {"type": "string", "description": "应对措施"},
+                            },
+                            "required": ["risk"],
+                        },
+                    },
+                    "systems": {
+                        "type": "array",
+                        "description": "涉及的系统、部门或角色",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["title", "steps"],
+            },
+        },
+    },
 ]
 
 

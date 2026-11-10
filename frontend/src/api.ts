@@ -1,4 +1,4 @@
-import type { AgentEvent, HealthInfo, MessageFeedback } from './types'
+import type { AgentEvent, HealthInfo, MessageFeedback, Plan, PlanStatus } from './types'
 import type { ToolStep } from './types'
 
 /**
@@ -25,6 +25,8 @@ export interface ChatOptions {
   force_retrieval: boolean
   /** 允许 Agent 抓取网页（前端「网页抓取」开关） */
   allow_fetch: boolean
+  /** 方案模式：强制走 draft_plan 结构化方案链路（前端「方案模式」开关） */
+  plan_mode?: boolean
 }
 
 export async function streamChat(
@@ -219,6 +221,8 @@ export interface StoredMessage {
   steps: ToolStep[]
   created_at?: string
   feedback?: MessageFeedback
+  /** 结构化方案（含确认状态） */
+  plan?: Plan
 }
 
 export async function createSession(): Promise<SessionInfo> {
@@ -278,4 +282,19 @@ export async function saveMessageFeedback(
     body: JSON.stringify(fb),
   })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+}
+
+/** 更新方案状态（人工确认闸门）：draft / confirmed / rejected */
+export async function updatePlanStatus(messageId: number, status: PlanStatus): Promise<Plan> {
+  const resp = await fetch(`/api/messages/${messageId}/plan`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  })
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
+    throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
+  }
+  const data = (await resp.json()) as { plan: Plan }
+  return data.plan
 }

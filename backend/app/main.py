@@ -80,6 +80,7 @@ class ChatIn(BaseModel):
     session_id: Optional[str] = None  # 提供则持久化并携带多轮上下文
     force_retrieval: bool = False  # 前端「知识检索」开关
     allow_fetch: bool = True  # 前端「网页抓取」开关
+    plan_mode: bool = False  # 前端「方案模式」开关：强制走结构化方案链路
 
 
 class ConfigIn(BaseModel):
@@ -434,6 +435,31 @@ def message_feedback(mid: int, body: MessageFeedbackIn):
     return {"status": "ok"}
 
 
+class PlanStatusIn(BaseModel):
+    """方案状态流转：draft（待确认）/ confirmed（已确认）/ rejected（已驳回）"""
+
+    status: str
+
+
+@app.patch("/api/messages/{mid}/plan")
+def update_message_plan(mid: int, body: PlanStatusIn):
+    """更新方案状态（人工确认闸门）。确认后才允许进入执行阶段。"""
+    from .plans import PLAN_STATUSES
+
+    if body.status not in PLAN_STATUSES:
+        raise HTTPException(status_code=422, detail=f"status 仅支持 {'/'.join(PLAN_STATUSES)}")
+    store = _ensure_store()
+    msg = store.get_message(mid)
+    if not msg:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    plan = msg.get("plan")
+    if not plan:
+        raise HTTPException(status_code=404, detail="该消息没有方案")
+    plan = {**plan, "status": body.status}
+    store.update_plan(mid, plan)
+    return {"status": "ok", "plan": plan}
+
+
 @app.delete("/api/sessions/{sid}")
 def delete_session(sid: str):
     _ensure_store().delete_session(sid)
@@ -455,15 +481,19 @@ def chat(body: ChatIn):
     def gen():
         content_parts: list = []
         steps: list = []
+        plan_payload: dict | None = None
         error_text: str | None = None
         for event in run_agent(
             _provider, _executor, body.message,
             history=history,
             force_retrieval=body.force_retrieval,
             allow_fetch=body.allow_fetch,
+            plan_mode=body.plan_mode,
         ):
             if event["type"] == "token":
                 content_parts.append(event["content"])
+            elif event["type"] == "plan":
+                plan_payload = event["plan"]
             elif event["type"] == "tool_call":
                 steps.append({"name": event["name"], "arguments": event["arguments"]})
             elif event["type"] == "tool_result" and steps:
@@ -479,7 +509,7 @@ def chat(body: ChatIn):
             # 生成失败时把错误持久化为消息内容，刷新后依然可见（而不是空白）
             if error_text:
                 text = f"{text}\n\n⚠️ {error_text}".strip()
-            store.add_message(body.session_id, "assistant", text, steps)
+            store.add_message(body.session_id, "assistant", text, steps, plan=plan_payload)
 
     return EventSourceResponse(gen())
 

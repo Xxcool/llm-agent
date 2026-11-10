@@ -4,6 +4,7 @@ import type { ChatMessage, ToolStep } from '../types'
 import { MessageBubble } from '../components/MessageBubble'
 import { Composer } from '../components/Composer'
 import { ToolTimeline } from '../components/ToolTimeline'
+import { PlanCard } from '../components/PlanCard'
 import { IconBolt } from '../components/icons'
 
 let nextId = 1
@@ -28,6 +29,7 @@ export function ChatPage({
   const [typingId, setTypingId] = useState<number | null>(null)
   const [knowledgeOn, setKnowledgeOn] = useState(true)
   const [webOn, setWebOn] = useState(true)
+  const [planMode, setPlanMode] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -201,7 +203,7 @@ export function ChatPage({
     streamChat(
       text,
       activeSessionRef.current,
-      { force_retrieval: knowledgeOn, allow_fetch: webOn },
+      { force_retrieval: knowledgeOn, allow_fetch: webOn, plan_mode: planMode },
       (event) => {
         switch (event.type) {
           case 'tool_call': {
@@ -224,6 +226,9 @@ export function ChatPage({
           }
           case 'token':
             typeQueueRef.current += event.content
+            break
+          case 'plan':
+            patch((msg) => ({ ...msg, plan: event.plan }))
             break
           case 'error':
             patch((msg) => ({ ...msg, error: event.message }))
@@ -315,6 +320,15 @@ export function ChatPage({
               {msg.role === 'assistant' && (
                 <div className="assistant-body">
                   {msg.steps.length > 0 && <ToolTimeline steps={msg.steps} />}
+                  {msg.plan && (
+                    <PlanCard
+                      plan={msg.plan}
+                      dbId={msg.dbId}
+                      onChange={(p) =>
+                        setMessages((m) => m.map((x) => (x.id === msg.id ? { ...x, plan: p } : x)))
+                      }
+                    />
+                  )}
                   <MessageBubble
                     message={msg}
                     streaming={msg.id === typingId}
@@ -334,8 +348,10 @@ export function ChatPage({
         onStop={stop}
         knowledgeOn={knowledgeOn}
         webOn={webOn}
+        planMode={planMode}
         onToggleKnowledge={() => setKnowledgeOn((v) => !v)}
         onToggleWeb={() => setWebOn((v) => !v)}
+        onTogglePlan={() => setPlanMode((v) => !v)}
       />
     </>
   )
