@@ -98,13 +98,14 @@ export function ChatPage({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const send = (text: string) => {
-    const trimmed = text.trim()
-    if (!trimmed || thinkingRef.current) return
-
-    const userMsg: ChatMessage = { id: nextId++, role: 'user', content: trimmed, steps: [] }
+  const runStream = (text: string, withUserBubble: boolean) => {
     const assistantMsg: ChatMessage = { id: nextId++, role: 'assistant', content: '', steps: [] }
-    setMessages((m) => [...m, userMsg, assistantMsg])
+    if (withUserBubble) {
+      const userMsg: ChatMessage = { id: nextId++, role: 'user', content: text, steps: [] }
+      setMessages((m) => [...m, userMsg, assistantMsg])
+    } else {
+      setMessages((m) => [...m, assistantMsg]) // 重新生成：复用原问题，不加新气泡
+    }
     setThinking(true)
     thinkingRef.current = true
     setTypingId(assistantMsg.id)
@@ -120,7 +121,7 @@ export function ChatPage({
     }
 
     streamChat(
-      trimmed,
+      text,
       sessionId,
       { force_retrieval: knowledgeOn, allow_fetch: webOn },
       (event) => {
@@ -169,6 +170,26 @@ export function ChatPage({
       })
   }
 
+  const send = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || thinkingRef.current) return
+    runStream(trimmed, true)
+  }
+
+  /** 重新生成：删除该助手消息及之后内容，用其前最近的用户问题重发 */
+  const regenerate = (assistantMsgId: number) => {
+    if (thinkingRef.current) return
+    const idx = messages.findIndex((m) => m.id === assistantMsgId)
+    if (idx < 0) return
+    const userText = [...messages.slice(0, idx)]
+      .reverse()
+      .find((m) => m.role === 'user')
+      ?.content
+    if (!userText) return
+    setMessages((m) => m.slice(0, idx))
+    runStream(userText, false)
+  }
+
   sendRef.current = send
 
   const stop = () => {
@@ -189,17 +210,24 @@ export function ChatPage({
         </button>
       </div>
       <main className="chat">
-        {messages.map((msg) => (
-          <div key={msg.id} className={`turn ${msg.role}`}>
-            {msg.role === 'assistant' && (
-              <div className="assistant-body">
-                {msg.steps.length > 0 && <ToolTimeline steps={msg.steps} />}
-                <MessageBubble message={msg} streaming={msg.id === typingId} />
-              </div>
-            )}
-            {msg.role === 'user' && <MessageBubble message={msg} streaming={false} />}
-          </div>
-        ))}
+        {(() => {
+          const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant')?.id
+          return messages.map((msg) => (
+            <div key={msg.id} className={`turn ${msg.role}`}>
+              {msg.role === 'assistant' && (
+                <div className="assistant-body">
+                  {msg.steps.length > 0 && <ToolTimeline steps={msg.steps} />}
+                  <MessageBubble
+                    message={msg}
+                    streaming={msg.id === typingId}
+                    onRegenerate={msg.id === lastAssistantId ? () => regenerate(msg.id) : undefined}
+                  />
+                </div>
+              )}
+              {msg.role === 'user' && <MessageBubble message={msg} streaming={false} />}
+            </div>
+          ))
+        })()}
         <div ref={bottomRef} />
       </main>
       <Composer

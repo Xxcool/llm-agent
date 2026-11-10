@@ -2,16 +2,25 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import { useEffect, useId, useRef, useState, type ReactElement } from 'react'
-import { IconCheck } from './icons'
+import { IconCheck, IconCopy, IconDownload } from './icons'
 
-/** 复制图标（仅此处使用，内联维护） */
-function IconCopy({ size = 13 }: { size?: number }) {
-  return (
-    <svg viewBox="0 0 16 16" width={size} height={size} fill="none" aria-hidden>
-      <rect x="5.2" y="5.2" width="8.3" height="8.3" rx="1.6" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M10.8 5V3.4A1.4 1.4 0 0 0 9.4 2H3.4A1.4 1.4 0 0 0 2 3.4v6a1.4 1.4 0 0 0 1.4 1.4H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
+/** 语言 → 下载文件扩展名 */
+const EXT_MAP: Record<string, string> = {
+  javascript: 'js', typescript: 'ts', tsx: 'tsx', jsx: 'jsx', python: 'py',
+  json: 'json', html: 'html', css: 'css', scss: 'scss', markdown: 'md',
+  bash: 'sh', shell: 'sh', sql: 'sql', java: 'java', go: 'go', rust: 'rs',
+  c: 'c', cpp: 'cpp', csharp: 'cs', yaml: 'yaml', xml: 'xml', php: 'php',
+  ruby: 'rb', kotlin: 'kt', swift: 'swift', dockerfile: 'Dockerfile',
+}
+
+function downloadText(filename: string, text: string, mime = 'text/plain') {
+  const blob = new Blob([text], { type: `${mime};charset=utf-8` })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 /** mermaid 流程图渲染（流式期间 250ms 防抖，失败降级显示源码） */
@@ -49,7 +58,7 @@ function MermaidDiagram({ chart }: { chart: string }) {
   return <div className="mermaid-box" dangerouslySetInnerHTML={{ __html: svg }} />
 }
 
-/** 带头部（语言标签 + 复制按钮）的代码块 */
+/** 带头部（语言标签 + 复制/下载按钮）的代码块 */
 function CodeBlock({ language, highlighted, rawCode }: {
   language: string
   highlighted: React.ReactNode // rehype-highlight 生成的带语法色子节点
@@ -70,17 +79,90 @@ function CodeBlock({ language, highlighted, rawCode }: {
     window.setTimeout(() => setCopied(false), 1500)
   }
 
+  const download = () => {
+    const ext = EXT_MAP[language.toLowerCase()] ?? 'txt'
+    const name = language.toLowerCase() === 'dockerfile' ? 'Dockerfile' : `snippet.${ext}`
+    downloadText(name, rawCode)
+  }
+
   return (
     <div className="code-block">
       <div className="code-head">
         <span className="code-lang">{language || 'text'}</span>
-        <button className={`code-copy ${copied ? 'ok' : ''}`} onClick={copy}>
-          {copied ? <IconCheck size={12} /> : <IconCopy />}
-          {copied ? '已复制' : '复制'}
-        </button>
+        <div className="code-actions">
+          <button className={`code-act ${copied ? 'ok' : ''}`} onClick={copy}>
+            {copied ? <IconCheck size={12} /> : <IconCopy size={13} />}
+            {copied ? '已复制' : '复制'}
+          </button>
+          <button className="code-act" onClick={download}>
+            <IconDownload size={13} /> 下载
+          </button>
+        </div>
       </div>
       <pre ref={preRef}><code className={`hljs${language ? ` language-${language}` : ''}`}>{highlighted}</code></pre>
     </div>
+  )
+}
+
+/** 表格：横向滚动 + 复制为 CSV */
+function TableBlock({ children }: { children: React.ReactNode }) {
+  const tableRef = useRef<HTMLTableElement>(null)
+  const [copied, setCopied] = useState(false)
+
+  const copyCsv = () => {
+    const table = tableRef.current
+    if (!table) return
+    const rows = Array.from(table.querySelectorAll('tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('th,td'))
+        .map((cell) => `"${(cell.textContent ?? '').replace(/"/g, '""').trim()}"`)
+        .join(','),
+    )
+    navigator.clipboard.writeText(rows.join('\n')).catch(() => undefined)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div className="md-table-wrap">
+      <div className="md-table-bar">
+        <button className={`code-act ${copied ? 'ok' : ''}`} onClick={copyCsv}>
+          {copied ? <IconCheck size={12} /> : <IconCopy size={13} />}
+          {copied ? '已复制' : '复制表格'}
+        </button>
+      </div>
+      <div className="md-table-scroll">
+        <table ref={tableRef}>{children}</table>
+      </div>
+    </div>
+  )
+}
+
+/** 图片：点击下载（跨域失败降级新标签打开） */
+function MdImage({ src, alt }: { src?: string; alt?: string }) {
+  const download = async () => {
+    if (!src) return
+    try {
+      const resp = await fetch(src)
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = alt || src.split('/').pop()?.split('?')[0] || 'image'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      window.open(src, '_blank')
+    }
+  }
+  return (
+    <span className="md-img-wrap">
+      <img src={src} alt={alt ?? ''} loading="lazy" className="md-img" />
+      {src && (
+        <button className="md-img-dl" onClick={download} title="下载图片">
+          <IconDownload size={13} />
+        </button>
+      )}
+    </span>
   )
 }
 
@@ -112,7 +194,7 @@ function extractCode(children: React.ReactNode): {
   }
 }
 
-/** 升级版 Markdown 渲染：代码块头部 + 语法高亮 + mermaid 流程图 + 图片适配 */
+/** 升级版 Markdown 渲染：代码块（复制/下载）+ 语法高亮 + mermaid 流程图 + 表格复制 + 图片下载 */
 export function MarkdownView({ content }: { content: string }) {
   return (
     <div className="bubble-md">
@@ -130,14 +212,9 @@ export function MarkdownView({ content }: { content: string }) {
               <CodeBlock language={info.language} highlighted={info.highlighted} rawCode={info.rawCode} />
             )
           },
-          img: ({ src, alt, ...rest }) => (
-            <img
-              src={typeof src === 'string' ? src : undefined}
-              alt={alt ?? ''}
-              loading="lazy"
-              className="md-img"
-              {...rest}
-            />
+          table: ({ children }) => <TableBlock>{children}</TableBlock>,
+          img: ({ src, alt }) => (
+            <MdImage src={typeof src === 'string' ? src : undefined} alt={alt ?? undefined} />
           ),
         }}
       >

@@ -635,6 +635,61 @@ body {
 }
 .code-copy:hover { color: var(--text); background: rgba(15, 17, 20, 0.06); }
 .code-copy.ok { color: #16a34a; }
+/* 代码块/表格操作按钮（复制、下载） */
+.code-actions { display: flex; align-items: center; gap: 4px; }
+.code-act {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: none; background: none; cursor: pointer;
+  font-size: 12px; font-family: inherit; color: #6b7487;
+  padding: 3px 8px; border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.code-act:hover { color: var(--text); background: rgba(15, 17, 20, 0.06); }
+.code-act.ok { color: #16a34a; }
+/* 表格（横向滚动 + 复制栏） */
+.md-table-wrap {
+  margin: 12px 0; border: 1px solid #e8eaf0; border-radius: 12px;
+  overflow: hidden; background: #fff;
+}
+.md-table-bar {
+  display: flex; justify-content: flex-end;
+  padding: 5px 8px;
+  background: #f2f4f8; border-bottom: 1px solid #e8eaf0;
+}
+.md-table-scroll { overflow-x: auto; }
+.md-table-scroll table { margin: 0; width: 100%; }
+.md-table-scroll th, .md-table-scroll td { white-space: nowrap; }
+/* 图片（hover 出下载按钮） */
+.md-img-wrap { position: relative; display: inline-block; max-width: 100%; }
+.md-img {
+  display: block; max-width: 100%; height: auto;
+  border-radius: 10px; margin: 10px 0;
+  border: 1px solid #eef0f4;
+}
+.md-img-dl {
+  position: absolute; top: 16px; right: 8px;
+  width: 28px; height: 28px; border-radius: 8px;
+  border: 1px solid #e8eaf0; background: rgba(255, 255, 255, 0.92);
+  color: #4b5568; cursor: pointer;
+  display: grid; place-items: center;
+  opacity: 0; transition: opacity 0.15s, color 0.15s;
+}
+.md-img-wrap:hover .md-img-dl { opacity: 1; }
+.md-img-dl:hover { color: var(--accent); }
+/* 助手消息操作栏（复制/重新生成/朗读/点赞/点踩） */
+.msg-actions {
+  display: flex; align-items: center; gap: 2px;
+  margin-top: 6px; padding-top: 4px;
+}
+.msg-act {
+  display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 7px;
+  border: none; background: none; cursor: pointer;
+  color: #9aa3b5;
+  transition: color 0.15s, background 0.15s;
+}
+.msg-act:hover { color: var(--text); background: rgba(15, 17, 20, 0.06); }
+.msg-act.active { color: var(--accent); background: var(--accent-soft); }
 .code-block pre {
   margin: 0; border: none; border-radius: 0;
   background: transparent; padding: 13px 15px;
@@ -665,12 +720,6 @@ body {
   margin: 12px 0; padding: 13px 15px;
   background: #f9fafc; border: 1px dashed #e4e7ee; border-radius: 12px;
   overflow-x: auto; font-size: 13px; color: var(--text-dim);
-}
-/* markdown 图片适配 */
-.md-img {
-  display: block; max-width: 100%; height: auto;
-  border-radius: 10px; margin: 10px 0;
-  border: 1px solid #eef0f4;
 }
 .bubble-md pre {
   background: #f7f8fc; border: 1px solid var(--border); border-radius: 10px;

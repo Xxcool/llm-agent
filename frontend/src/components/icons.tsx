@@ -158,3 +158,55 @@ export function IconChevron({ size = 16 }: IconProps) {
     </svg>
   )
 }
+
+export function IconCopy({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none">
+      <rect x="5.2" y="5.2" width="8.3" height="8.3" rx="1.6" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M10.8 5V3.4A1.4 1.4 0 0 0 9.4 2H3.4A1.4 1.4 0 0 0 2 3.4v6a1.4 1.4 0 0 0 1.4 1.4H5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function IconRefresh({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none">
+      <path d="M13.6 8a5.6 5.6 0 1 1-1.64-3.96" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M13.8 1.8v2.6h-2.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function IconThumbUp({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none">
+      <path d="M4.6 7.2 7.4 2c.8 0 1.6.7 1.6 1.6v2.6h3.4c.9 0 1.6.8 1.4 1.7l-.9 4.4c-.2.8-.9 1.3-1.7 1.3H4.6M4.6 7.2v6.4M4.6 7.2H2.6v6.4h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function IconThumbDown({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none" style={{ transform: 'rotate(180deg)' }}>
+      <path d="M4.6 7.2 7.4 2c.8 0 1.6.7 1.6 1.6v2.6h3.4c.9 0 1.6.8 1.4 1.7l-.9 4.4c-.2.8-.9 1.3-1.7 1.3H4.6M4.6 7.2v6.4M4.6 7.2H2.6v6.4h2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function IconSpeaker({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none">
+      <path d="M2.4 6.2v3.6h2.4L8.6 13V3L4.8 6.2H2.4Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M10.8 5.6a3.4 3.4 0 0 1 0 4.8M12.6 3.8a6 6 0 0 1 0 8.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+export function IconDownload({ size = 16 }: IconProps) {
+  return (
+    <svg {...base(size)} fill="none">
+      <path d="M8 2.4v7.8M8 10.2 5 7.4M8 10.2l3-2.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2.6 13.4h10.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
+}
