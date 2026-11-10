@@ -7,12 +7,20 @@ export function Composer({
   onStop,
   hero = false,
   autoFocusInput = false,
+  knowledgeOn,
+  webOn,
+  onToggleKnowledge,
+  onToggleWeb,
 }: {
   disabled: boolean
   onSend: (text: string) => void
   onStop: () => void
   hero?: boolean
   autoFocusInput?: boolean
+  knowledgeOn: boolean
+  webOn: boolean
+  onToggleKnowledge: () => void
+  onToggleWeb: () => void
 }) {
   const [text, setText] = useState('')
   const taRef = useRef<HTMLTextAreaElement>(null)
@@ -54,20 +62,30 @@ export function Composer({
         />
         <div className="composer-bar">
           <div className="composer-chips">
-            <span className="chip">
+            <button
+              type="button"
+              className={`chip ${knowledgeOn ? 'active' : ''}`}
+              onClick={onToggleKnowledge}
+              title={knowledgeOn ? '已开启：回答前强制检索知识库' : '已关闭：由 Agent 自行判断是否检索'}
+            >
               <svg viewBox="0 0 16 16" fill="none" aria-hidden>
                 <circle cx="7" cy="7" r="4.6" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M10.4 10.4L14 14" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
               知识检索
-            </span>
-            <span className="chip">
+            </button>
+            <button
+              type="button"
+              className={`chip ${webOn ? 'active' : ''}`}
+              onClick={onToggleWeb}
+              title={webOn ? '已开启：允许 Agent 抓取网页正文' : '已关闭：不向 Agent 提供网页抓取能力'}
+            >
               <svg viewBox="0 0 16 16" fill="none" aria-hidden>
                 <circle cx="8" cy="8" r="6.3" stroke="currentColor" strokeWidth="1.4" />
                 <path d="M1.7 8h12.6M8 1.7c1.9 1.8 2.9 4 2.9 6.3S9.9 12.5 8 14.3C6.1 12.5 5.1 10.3 5.1 8S6.1 3.5 8 1.7z" stroke="currentColor" strokeWidth="1.2" />
               </svg>
               网页抓取
-            </span>
+            </button>
           </div>
           {disabled ? (
             <button className="send stop" onClick={onStop} title="停止生成">

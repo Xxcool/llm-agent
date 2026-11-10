@@ -65,14 +65,22 @@ class ToolExecutor:
                 return "简历文件不存在。"
             return f.read_text(encoding="utf-8")
         if name == "fetch_url":
-            url = args["url"]
-            if not url.startswith(("http://", "https://")):
-                return "仅支持 http/https 链接。"
-            resp = httpx.get(url, timeout=config.FETCH_URL_TIMEOUT,
-                             headers={"User-Agent": "llm-agent-platform/0.1"}, follow_redirects=True)
-            resp.raise_for_status()
-            text = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", resp.text)
-            text = re.sub(r"<[^>]+>", " ", text)
-            text = re.sub(r"\s+", " ", text).strip()
-            return text[:4000]
+            try:
+                return fetch_text(args["url"])
+            except Exception as e:  # noqa: BLE001 抓取失败以文本回给模型
+                return f"抓取失败：{e.__class__.__name__}: {e}"
         return f"未知工具：{name}"
+
+
+def fetch_text(url: str, limit: int = 4000) -> str:
+    """抓取网页并转纯文本（去 script/style/标签），供工具与链接导入共用。"""
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("仅支持 http/https 链接")
+    resp = httpx.get(url, timeout=config.FETCH_URL_TIMEOUT,
+                     headers={"User-Agent": "Mozilla/5.0 (compatible; llm-agent-platform/0.1)"},
+                     follow_redirects=True)
+    resp.raise_for_status()
+    text = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>", " ", resp.text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:limit]

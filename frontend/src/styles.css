@@ -182,10 +182,15 @@ body {
   font-size: 13px; color: #3d4759;
   border: 1px solid rgba(15, 17, 20, 0.07);
   background: rgba(255, 255, 255, 0.5);
-  user-select: none; cursor: default;
-  transition: background 0.15s, border-color 0.15s;
+  user-select: none; cursor: pointer; font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .chip:hover { background: rgba(255, 255, 255, 0.9); border-color: rgba(15, 17, 20, 0.12); }
+.chip.active {
+  background: rgba(77, 107, 254, 0.10);
+  border-color: rgba(77, 107, 254, 0.35);
+  color: #3b5bfd;
+}
 .chip svg { width: 14px; height: 14px; }
 .send {
   background: var(--accent); color: #fff; border: none; border-radius: 50%;

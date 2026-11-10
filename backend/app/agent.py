@@ -13,21 +13,56 @@ SYSTEM_PROMPT = (
     "- 回答基于工具返回的事实，并在引用知识库内容时注明来源文件；工具无法覆盖时如实说明。"
 )
 
-TOOL_EVENTS = {"type": "tool_call", "name": "", "arguments": {}}
+
+def _tools_schema(allow_fetch: bool) -> list:
+    if allow_fetch:
+        return TOOLS_SCHEMA
+    return [t for t in TOOLS_SCHEMA if t["function"]["name"] != "fetch_url"]
 
 
-def run_agent(provider: BaseProvider, executor: ToolExecutor, user_message: str) -> Generator[dict, None, None]:
+def run_agent(
+    provider: BaseProvider,
+    executor: ToolExecutor,
+    user_message: str,
+    force_retrieval: bool = False,
+    allow_fetch: bool = True,
+) -> Generator[dict, None, None]:
     """执行完整 Agent 循环，逐个 yield 事件：
     {"type":"tool_call","name","arguments"} / {"type":"tool_result","name","content"}
     / {"type":"token","content"} / {"type":"done"} / {"type":"error","message"}
+
+    force_retrieval: 前端「知识检索」开关，开启后强制先检索一次知识库再回答
+    allow_fetch: 前端「网页抓取」开关，关闭时不向模型暴露 fetch_url 工具
     """
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_message},
     ]
+    tools = _tools_schema(allow_fetch)
+
     try:
+        if force_retrieval:
+            yield {"type": "tool_call", "name": "search_knowledge", "arguments": {"query": user_message}}
+            try:
+                result = executor.run("search_knowledge", {"query": user_message})
+            except Exception as e:  # noqa: BLE001
+                result = f"检索失败：{e.__class__.__name__}: {e}"
+            yield {"type": "tool_result", "name": "search_knowledge", "content": result}
+            # 以标准 assistant(tool_calls)+tool 消息形式回填，兼容 OpenAI 协议
+            call_id = "forced_search_1"
+            messages.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": call_id, "type": "function",
+                    "function": {"name": "search_knowledge",
+                                 "arguments": json.dumps({"query": user_message}, ensure_ascii=False)},
+                }],
+            })
+            messages.append({"role": "tool", "tool_call_id": call_id, "content": result})
+
         for _ in range(config.MAX_TOOL_ROUNDS):
-            resp = provider.chat(messages, tools=TOOLS_SCHEMA)
+            resp = provider.chat(messages, tools=tools)
 
             if resp.tool_calls:
                 messages.append({

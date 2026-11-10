@@ -20,6 +20,8 @@ export default function App() {
   const [health, setHealth] = useState<HealthInfo | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showKnowledge, setShowKnowledge] = useState(false)
+  const [knowledgeOn, setKnowledgeOn] = useState(true) // 强制检索知识库
+  const [webOn, setWebOn] = useState(true) // 允许抓取网页
   const abortRef = useRef<AbortController | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -88,6 +90,7 @@ export default function App() {
 
     streamChat(
       trimmed,
+      { force_retrieval: knowledgeOn, allow_fetch: webOn },
       (event) => {
         switch (event.type) {
           case 'tool_call': {
@@ -130,7 +133,7 @@ export default function App() {
         setThinking(false)
         abortRef.current = null
       })
-  }, [thinking, flushTypeBuffer])
+  }, [thinking, flushTypeBuffer, knowledgeOn, webOn])
 
   const stop = useCallback(() => {
     abortRef.current?.abort()
@@ -186,7 +189,15 @@ export default function App() {
             ))}
             <div ref={bottomRef} />
           </main>
-          <Composer disabled={thinking} onSend={send} onStop={stop} />
+          <Composer
+            disabled={thinking}
+            onSend={send}
+            onStop={stop}
+            knowledgeOn={knowledgeOn}
+            webOn={webOn}
+            onToggleKnowledge={() => setKnowledgeOn((v) => !v)}
+            onToggleWeb={() => setWebOn((v) => !v)}
+          />
         </>
       ) : (
         <main
@@ -198,7 +209,17 @@ export default function App() {
             上传文档构建专属知识库，Agent 自动检索、抓取网页、调用工具，流式生成回答
           </p>
           <div className="hero-composer rise" style={{ animationDelay: '0.18s' }}>
-            <Composer disabled={thinking} onSend={send} onStop={stop} hero autoFocusInput />
+            <Composer
+              disabled={thinking}
+              onSend={send}
+              onStop={stop}
+              hero
+              autoFocusInput
+              knowledgeOn={knowledgeOn}
+              webOn={webOn}
+              onToggleKnowledge={() => setKnowledgeOn((v) => !v)}
+              onToggleWeb={() => setWebOn((v) => !v)}
+            />
           </div>
           <div className="hero-quick rise" style={{ animationDelay: '0.24s' }}>
             <button className="quick-chip" onClick={() => setShowSettings(true)}>

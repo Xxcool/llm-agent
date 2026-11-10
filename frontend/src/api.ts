@@ -19,15 +19,23 @@ function parseSSEBuffer(buffer: string, onLine: (data: string) => void): string 
  * 发送对话请求并流式消费 Agent 事件。
  * onEvent 回调按事件类型分发；返回 abort 函数用于中途取消。
  */
+export interface ChatOptions {
+  /** 强制先检索知识库（前端「知识检索」开关） */
+  force_retrieval: boolean
+  /** 允许 Agent 抓取网页（前端「网页抓取」开关） */
+  allow_fetch: boolean
+}
+
 export async function streamChat(
   message: string,
+  options: ChatOptions,
   onEvent: (event: AgentEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const resp = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, ...options }),
     signal,
   })
   if (!resp.ok || !resp.body) {
@@ -127,4 +135,33 @@ export async function deleteKnowledge(source: string): Promise<void> {
     method: 'DELETE',
   })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+}
+
+export interface ImportResult {
+  saved: string[]
+  failed: { url?: string; id?: string; title?: string; error: string }[]
+  total_chunks: number
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
+    throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
+  }
+  return (await resp.json()) as T
+}
+
+/** 批量导入网页链接（如掘金文章） */
+export async function importUrls(urls: string[]): Promise<ImportResult> {
+  return postJson<ImportResult>('/api/knowledge/url', { urls })
+}
+
+/** 按掘金用户 ID / 主页链接一键导入公开文章 */
+export async function importJuejin(userId: string, limit = 20): Promise<ImportResult> {
+  return postJson<ImportResult>('/api/knowledge/juejin', { user_id: userId, limit })
 }
