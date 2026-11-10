@@ -1,4 +1,4 @@
-# 企业知识智能体（Enterprise Knowledge Agent）
+# LLM Agent 智能对话平台
 
 面向企业知识资产的 RAG 智能体：**知识库检索增强 + Function Calling 工具循环 + SSE 流式输出**，
 前端将 Agent 的工具调用过程与引用来源实时可视化。

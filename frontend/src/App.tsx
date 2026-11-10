@@ -162,7 +162,7 @@ export default function App() {
         <div className={`nav-pill ${glass ? 'glass' : ''}`}>
           <div className="header-title">
             <span className="logo"><IconBolt size={15} /></span>
-            <h1>企业知识智能体</h1>
+            <h1>LLM Agent 智能对话平台</h1>
           </div>
           <div className="header-actions">
             <span className={`status-chip ${isDemo ? 'demo' : 'ok'}`}>
