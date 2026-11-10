@@ -6,7 +6,6 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -200,65 +199,6 @@ def import_urls(body: UrlImportIn):
             saved.append(str(target.relative_to(KNOWLEDGE_ROOT)))
         except Exception as e:  # noqa: BLE001 单条失败不影响其他
             failed.append({"url": url, "error": f"{e.__class__.__name__}: {e}"})
-    rag.ingest_dir(KNOWLEDGE_ROOT)
-    total = rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-    return {"status": "ok", "saved": saved, "failed": failed, "total_chunks": total}
-
-
-class JuejinImportIn(BaseModel):
-    user_id: str
-    limit: int = 20
-
-
-@app.post("/api/knowledge/juejin")
-def import_juejin(body: JuejinImportIn):
-    """按掘金用户 ID 批量导入其公开文章：列文章 → 抓 SSR 正文 → 落盘 → 入库。"""
-    uid = body.user_id.strip()
-    if not uid:
-        raise HTTPException(400, "请提供掘金用户 ID 或主页链接")
-    # 支持直接粘贴主页链接 https://juejin.cn/user/4265760845468296/posts
-    m = re.search(r"/user/(\d+)", uid)
-    if m:
-        uid = m.group(1)
-    limit = max(1, min(body.limit, 50))
-
-    try:
-        resp = httpx.post(
-            "https://api.juejin.cn/content_api/v1/article/query_list",
-            json={"user_id": uid, "sort_type": 2, "cursor": "0", "limit": limit},
-            headers={"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"},
-            timeout=20,
-        )
-        resp.raise_for_status()
-        items = resp.json().get("data") or []
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"获取掘金文章列表失败：{e.__class__.__name__}: {e}")
-
-    if not items:
-        raise HTTPException(404, "未查询到该用户的公开文章（请检查用户 ID）")
-
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    rag = _ensure_state()
-    saved: list = []
-    failed: list = []
-    for it in items:
-        info = it.get("article_info") or {}
-        aid = info.get("article_id")
-        title = (info.get("title") or aid or "").strip()
-        if not aid:
-            continue
-        url = f"https://juejin.cn/post/{aid}"
-        try:
-            text = fetch_text(url, limit=30000)
-            if len(text) < 60:
-                raise ValueError("正文过短（可能被反爬拦截）")
-            filename = re.sub(r"[^\w.\-]", "_", f"juejin_{aid}.md")
-            target = UPLOAD_DIR / filename
-            target.write_text(f"# {title}\n\n> 来源：{url}\n\n{text}", encoding="utf-8")
-            saved.append(f"{title}（{filename}）")
-        except Exception as e:  # noqa: BLE001 单篇失败不阻断
-            failed.append({"id": aid, "title": title, "error": f"{e.__class__.__name__}: {e}"})
-
     rag.ingest_dir(KNOWLEDGE_ROOT)
     total = rag.conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
     return {"status": "ok", "saved": saved, "failed": failed, "total_chunks": total}

@@ -2,15 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import {
   addKnowledgeText,
   deleteKnowledge,
-  importJuejin,
   importUrls,
   listKnowledge,
   uploadKnowledgeFile,
 } from '../api'
 import type { KnowledgeDoc } from '../api'
-import { IconFile, IconImport, IconLink, IconPencil, IconUpload, IconX } from './icons'
+import { IconFile, IconLink, IconPencil, IconUpload, IconX } from './icons'
 
-type ImportMode = 'none' | 'paste' | 'url' | 'juejin'
+type ImportMode = 'none' | 'paste' | 'url'
 
 export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([])
@@ -21,7 +20,6 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
   const [docName, setDocName] = useState('')
   const [docText, setDocText] = useState('')
   const [urlText, setUrlText] = useState('')
-  const [juejinUser, setJuejinUser] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const refresh = () => {
@@ -73,14 +71,6 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
       if (r.saved.length) setUrlText('')
     })
 
-  const handleJuejin = () =>
-    run(async () => {
-      const r = await importJuejin(juejinUser.trim(), 20)
-      setMessage(
-        `掘金导入完成：成功 ${r.saved.length} 篇${r.failed.length ? `，失败 ${r.failed.length} 篇` : ''}`,
-      )
-    })
-
   const handleDelete = (source: string) =>
     run(async () => {
       await deleteKnowledge(source)
@@ -96,8 +86,8 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
         </div>
 
         <p className="panel-sub">
-          知识库支持四种来源：本地上传、粘贴文本、链接抓取、掘金账号一键导入。
-          文档自动分块向量化，问答时被 Agent 检索引用。
+          知识库用于沉淀企业制度、产品文档、技术资料与业务流程。支持本地上传、文本录入与链接抓取，
+          文档自动分块向量化，问答时被智能体检索并标注来源。
         </p>
 
         <div className="panel-actions">
@@ -105,13 +95,10 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
             <IconUpload size={14} /> 上传文件
           </button>
           <button className="btn ghost" onClick={() => setMode(mode === 'paste' ? 'none' : 'paste')}>
-            <IconPencil size={14} /> 粘贴文本
+            <IconPencil size={14} /> 文本录入
           </button>
           <button className="btn ghost" onClick={() => setMode(mode === 'url' ? 'none' : 'url')}>
-            <IconLink size={14} /> 导入链接
-          </button>
-          <button className="btn ghost" onClick={() => setMode(mode === 'juejin' ? 'none' : 'juejin')}>
-            <IconImport size={14} /> 导入掘金
+            <IconLink size={14} /> 链接导入
           </button>
           <input
             ref={fileRef}
@@ -131,7 +118,7 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
             <input
               value={docName}
               onChange={(e) => setDocName(e.target.value)}
-              placeholder="文档名称，如：Rust 入门笔记"
+              placeholder="文档名称，如：员工报销制度"
             />
             <textarea
               value={docText}
@@ -150,27 +137,11 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
             <textarea
               value={urlText}
               onChange={(e) => setUrlText(e.target.value)}
-              placeholder={'粘贴文章链接，一行一个（最多 10 个）\nhttps://juejin.cn/post/7xxxxxxxxxxxxxxx'}
+              placeholder={'粘贴文档链接，一行一个（最多 10 个）\nhttps://intranet.example.com/docs/xxx'}
               rows={4}
             />
             <button className="btn primary small" onClick={handleUrls} disabled={busy || !urlText.trim()}>
               {busy ? '抓取中…' : '抓取正文并入库'}
-            </button>
-          </div>
-        )}
-
-        {mode === 'juejin' && (
-          <div className="paste-box">
-            <input
-              value={juejinUser}
-              onChange={(e) => setJuejinUser(e.target.value)}
-              placeholder="掘金用户 ID 或主页链接，如 4265760845468296 / https://juejin.cn/user/4265760845468296/posts"
-            />
-            <p className="panel-sub" style={{ margin: 0 }}>
-              将抓取该账号最近 20 篇公开文章的正文并入库（单篇失败不影响其他）。
-            </p>
-            <button className="btn primary small" onClick={handleJuejin} disabled={busy || !juejinUser.trim()}>
-              {busy ? '导入中，请稍候…' : '一键导入文章'}
             </button>
           </div>
         )}

@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { ToolStep } from '../types'
-import { IconChevron, IconFile, IconGlobe, IconSearch, IconWrench } from './icons'
+import { IconChevron, IconGlobe, IconSearch, IconWrench } from './icons'
 
 const TOOL_META: Record<string, { icon: ReactNode; label: string }> = {
   search_knowledge: { icon: <IconSearch size={13} />, label: '检索知识库' },
-  get_resume: { icon: <IconFile size={13} />, label: '查询简历' },
   fetch_url: { icon: <IconGlobe size={13} />, label: '抓取网页' },
 }
 

@@ -162,7 +162,7 @@ export default function App() {
         <div className={`nav-pill ${glass ? 'glass' : ''}`}>
           <div className="header-title">
             <span className="logo"><IconBolt size={15} /></span>
-            <h1>LLM Agent 智能对话平台</h1>
+            <h1>企业知识智能体</h1>
           </div>
           <div className="header-actions">
             <span className={`status-chip ${isDemo ? 'demo' : 'ok'}`}>
@@ -213,9 +213,9 @@ export default function App() {
           className="hero"
           onScroll={(e) => setHeroScrolled((e.target as HTMLElement).scrollTop > 12)}
         >
-          <h1 className="hero-title rise" style={{ animationDelay: '0.08s' }}>让知识可对话</h1>
+          <h1 className="hero-title rise" style={{ animationDelay: '0.08s' }}>让企业知识可对话</h1>
           <p className="hero-sub rise" style={{ animationDelay: '0.12s' }}>
-            上传文档构建专属知识库，Agent 自动检索、抓取网页、调用工具，流式生成回答
+            接入制度规范、产品文档与业务资料，智能体自动检索、标注来源、流式作答
           </p>
           <div className="hero-composer rise" style={{ animationDelay: '0.18s' }}>
             <Composer
@@ -245,12 +245,12 @@ export default function App() {
             <div className="feature-card">
               <div className="feature-icon"><IconDatabase size={20} /></div>
               <h3>RAG 检索增强</h3>
-              <p>文档自动分块向量化，回答前检索最相关的知识片段，并标注来源文件</p>
+              <p>企业文档自动分块向量化，回答前检索最相关片段并标注来源文件，内容可追溯</p>
             </div>
             <div className="feature-card">
               <div className="feature-icon"><IconWrench size={20} /></div>
               <h3>Function Calling</h3>
-              <p>Agent 自主调用知识检索、简历查询、网页抓取三类工具，多轮闭环完成任务</p>
+              <p>智能体按需调用知识检索与网页抓取工具，多轮闭环完成跨文档问答</p>
             </div>
             <div className="feature-card">
               <div className="feature-icon"><IconSparkle size={20} /></div>

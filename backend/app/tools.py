@@ -1,20 +1,17 @@
 """工具集：Function Calling 的 schema 与实现。"""
 import re
-from pathlib import Path
 
 import httpx
 
 from . import config
 from .rag import RagStore
 
-RESUME_FILE = "team-intro.md"  # 知识库目录中的简历文件，整篇返回
-
 TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
             "name": "search_knowledge",
-            "description": "在用户的个人知识库（技术文章、笔记、项目资料）中做语义检索，返回最相关的片段。",
+            "description": "在企业知识库（制度规范、产品文档、技术资料、运营手册等）中做语义检索，返回最相关的片段。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -22,14 +19,6 @@ TOOLS_SCHEMA = [
                 },
                 "required": ["query"],
             },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_resume",
-            "description": "获取用户完整简历内容，用于回答个人经历、项目、技能相关问题。",
-            "parameters": {"type": "object", "properties": {}},
         },
     },
     {
@@ -59,11 +48,6 @@ class ToolExecutor:
             if not hits:
                 return "知识库中没有相关内容。"
             return "\n---\n".join(f"[{src}] {text}" for src, text, _ in hits)
-        if name == "get_resume":
-            f = Path(config.KNOWLEDGE_DIR) / RESUME_FILE
-            if not f.exists():
-                return "简历文件不存在。"
-            return f.read_text(encoding="utf-8")
         if name == "fetch_url":
             try:
                 return fetch_text(args["url"])

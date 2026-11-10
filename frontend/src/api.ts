@@ -156,12 +156,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await resp.json()) as T
 }
 
-/** 批量导入网页链接（如掘金文章） */
+/** 批量导入网页链接（如外部文档、规章制度页面） */
 export async function importUrls(urls: string[]): Promise<ImportResult> {
   return postJson<ImportResult>('/api/knowledge/url', { urls })
-}
-
-/** 按掘金用户 ID / 主页链接一键导入公开文章 */
-export async function importJuejin(userId: string, limit = 20): Promise<ImportResult> {
-  return postJson<ImportResult>('/api/knowledge/juejin', { user_id: userId, limit })
 }
