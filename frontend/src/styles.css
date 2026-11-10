@@ -174,6 +174,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .rise { animation: none; opacity: 1; transform: none; }
 }
+.no-anim *, .no-anim *::before, .no-anim *::after {
+  animation: none !important; transition: none !important;
+}
+.no-anim .rise { opacity: 1 !important; transform: none !important; }
 
 /* ---------- composer（玻璃卡片） ---------- */
 .composer { padding: 14px 24px 18px; }

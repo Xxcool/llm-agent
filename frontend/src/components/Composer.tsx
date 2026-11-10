@@ -89,11 +89,18 @@ export function Composer({
           </div>
           {disabled ? (
             <button className="send stop" onClick={onStop} title="停止生成">
-              ■
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
+                <rect x="1.6" y="1.6" width="8.8" height="8.8" rx="2" fill="currentColor" />
+              </svg>
             </button>
           ) : (
             <button className="send" onClick={submit} disabled={!text.trim()} title="发送">
-              ↑
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+                <path
+                  d="M8.3125 0.980206C8.66767 1.05312 8.97902 1.2042 9.2627 1.43235C9.48724 1.613 9.73029 1.85795 9.97949 2.10716L14.707 6.8347L13.293 8.24876L9 3.95579V15.0417H7V3.95579L2.70703 8.24876L1.29297 6.8347L6.02051 2.10716C6.26971 1.85795 6.51277 1.613 6.7373 1.43235C6.97662 1.23988 7.28445 1.04404 7.6875 0.980206C7.8973 0.947029 8.1031 0.955183 8.3125 0.980206Z"
+                  fill="currentColor"
+                />
+              </svg>
             </button>
           )}
         </div>
