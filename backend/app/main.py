@@ -105,11 +105,20 @@ def health():
 def get_config():
     rt = _load_runtime()
     _ensure_state()
+    key = rt.get("api_key") or config.LLM_API_KEY
+    # 只回传掩码，不回传明文 Key
+    if key and len(key) > 8:
+        masked = f"{key[:4]}••••{key[-4:]}"
+    elif key:
+        masked = "••••"
+    else:
+        masked = None
     return {
         "provider": _provider.name,
         "base_url": rt.get("base_url") or config.LLM_BASE_URL,
         "model": rt.get("model") or config.LLM_MODEL,
-        "has_key": bool(rt.get("api_key") or config.LLM_API_KEY),
+        "has_key": bool(key),
+        "key_masked": masked,
     }
 
 

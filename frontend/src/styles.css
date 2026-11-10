@@ -872,6 +872,16 @@ body {
 @keyframes blink { 50% { opacity: 0.25; } }
 
 /* ---------- modal ---------- */
+.field-label { font-size: 13px; color: var(--text); }
+.preset-chips { display: flex; gap: 8px; margin-top: 8px; }
+.preset-chip {
+  padding: 6px 14px; border-radius: 16px;
+  border: 1px solid #e2e6ee; background: #fff;
+  font-size: 12.5px; font-family: inherit; color: #4b5568;
+  cursor: pointer; transition: all 0.15s;
+}
+.preset-chip:hover { border-color: var(--accent); color: var(--accent); }
+.preset-chip.active { background: var(--accent-soft); border-color: var(--accent); color: #3b5bfd; }
 .modal-mask {
   position: fixed; inset: 0; z-index: 50;
   background: rgba(31, 45, 80, 0.28);

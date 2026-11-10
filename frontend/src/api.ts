@@ -77,6 +77,8 @@ export interface PlatformConfig {
   base_url: string
   model: string
   has_key: boolean
+  /** 已保存 Key 的掩码（如 sk-1••••abcd），不回传明文 */
+  key_masked?: string | null
 }
 
 export async function fetchConfig(): Promise<PlatformConfig> {
