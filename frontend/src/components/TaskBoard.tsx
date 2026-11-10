@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import type { Task } from '../types'
-import { breakdownTasks, runTask } from '../api'
+import { applyTask, breakdownTasks, discardTask, runTask } from '../api'
 import { MarkdownView } from './MarkdownView'
-import { IconCheck, IconPlan } from './icons'
+import { IconCheck, IconPlan, IconX } from './icons'
 
 const STATUS_LABEL: Record<Task['status'], string> = {
   pending: '待执行',
   running: '执行中',
+  review: '待审批',
   done: '已完成',
   failed: '执行失败',
 }
@@ -25,6 +26,7 @@ export function TaskBoard({
 }) {
   const [breaking, setBreaking] = useState(false)
   const [runningId, setRunningId] = useState<number | null>(null)
+  const [applyingId, setApplyingId] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [openId, setOpenId] = useState<number | null>(null)
 
@@ -60,6 +62,38 @@ export function TaskBoard({
     }
   }
 
+  /** 代码类：批准落盘（写入工作区沙箱 + 校验） */
+  const apply = async (task: Task) => {
+    if (applyingId !== null) return
+    setApplyingId(task.id)
+    setError('')
+    try {
+      const r = await applyTask(task.id)
+      onTasks(tasks.map((t) => (t.id === task.id ? r.task : t)))
+      const failed = r.checks.filter((c) => !c.ok)
+      if (failed.length) setError(`已落盘，但 ${failed.length} 个文件校验未通过：${failed[0].detail}`)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setApplyingId(null)
+    }
+  }
+
+  /** 代码类：丢弃待审批文件 */
+  const discard = async (task: Task) => {
+    if (applyingId !== null) return
+    setApplyingId(task.id)
+    setError('')
+    try {
+      const updated = await discardTask(task.id)
+      onTasks(tasks.map((t) => (t.id === task.id ? updated : t)))
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setApplyingId(null)
+    }
+  }
+
   return (
     <div className="task-board">
       <div className="task-head">
@@ -74,7 +108,7 @@ export function TaskBoard({
             {breaking ? '拆解中…' : '拆解为任务'}
           </button>
         ) : (
-          <span className="task-hint">执行产出可预览，后续将支持 diff 审批与落盘（P3/M4）</span>
+          <span className="task-hint">文档类直接交付；代码类先看 diff，批准后落入工作区沙箱并自动校验</span>
         )}
       </div>
 
@@ -88,17 +122,92 @@ export function TaskBoard({
                 <div className="task-row">
                   <span className="task-index">{i + 1}</span>
                   <span className="task-item-title">{t.title}</span>
+                  <span className={`task-kind ${t.kind}`}>{t.kind === 'code' ? '代码' : '文档'}</span>
                   <span className={`task-status ${t.status}`}>{STATUS_LABEL[t.status]}</span>
-                  <button
-                    className="btn ghost small task-run"
-                    onClick={() => run(t)}
-                    disabled={runningId !== null || t.status === 'running'}
-                  >
-                    {t.status === 'done' ? '重新执行' : t.status === 'running' ? '执行中…' : '执行'}
-                  </button>
+                  {t.status === 'review' ? (
+                    <span className="task-review-actions">
+                      <button
+                        className="btn primary small"
+                        onClick={() => apply(t)}
+                        disabled={applyingId !== null}
+                      >
+                        <IconCheck size={12} /> {applyingId === t.id ? '落盘中…' : '批准落盘'}
+                      </button>
+                      <button
+                        className="btn ghost small"
+                        onClick={() => discard(t)}
+                        disabled={applyingId !== null}
+                      >
+                        <IconX size={12} /> 丢弃
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      className="btn ghost small task-run"
+                      onClick={() => run(t)}
+                      disabled={runningId !== null || t.status === 'running'}
+                    >
+                      {t.status === 'done' ? '重新执行' : t.status === 'running' ? '执行中…' : '执行'}
+                    </button>
+                  )}
                 </div>
                 {t.detail && <p className="task-detail">{t.detail}</p>}
                 {t.output && <p className="task-output">产出：{t.output}</p>}
+
+                {/* 代码类交付：diff 预览（批准前不落盘） */}
+                {t.files && t.files.length > 0 && (
+                  <div className="task-files">
+                    <p className="task-files-hint">
+                      待落盘文件 {t.files.length} 个 · 工作区沙箱 · 批准后写入并自动校验
+                    </p>
+                    {t.files.map((f) => (
+                      <div key={f.path} className="task-file">
+                        <div className="task-file-head">
+                          <span className="task-file-path">{f.path}</span>
+                          <span className={`task-file-flag ${f.exists ? 'mod' : 'new'}`}>
+                            {f.exists ? '修改' : '新增'}
+                          </span>
+                          <span className="task-file-stat">
+                            <b className="add">+{f.added}</b>
+                            <b className="del">-{f.removed}</b>
+                          </span>
+                        </div>
+                        {f.diff && (
+                          <pre className="task-diff">
+                            {f.diff.split('\n').map((line, li) => (
+                              <span
+                                key={li}
+                                className={
+                                  line.startsWith('+') && !line.startsWith('+++')
+                                    ? 'd-add'
+                                    : line.startsWith('-') && !line.startsWith('---')
+                                      ? 'd-del'
+                                      : line.startsWith('@@')
+                                        ? 'd-hunk'
+                                        : ''
+                                }
+                              >
+                                {line}{'\n'}
+                              </span>
+                            ))}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 落盘后的确定性校验结果 */}
+                {t.checks && t.checks.length > 0 && (
+                  <div className="task-checks">
+                    {t.checks.map((c) => (
+                      <span key={c.path} className={`task-check ${c.ok ? 'ok' : 'err'}`}>
+                        {c.ok ? '✓' : '✗'} {c.path}：{c.detail}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {t.artifact && (
                   <div className="task-artifact">
                     <button
@@ -106,7 +215,7 @@ export function TaskBoard({
                       onClick={() => setOpenId(openId === t.id ? null : t.id)}
                     >
                       <IconCheck size={12} />
-                      {openId === t.id ? '收起交付物' : '查看交付物'}
+                      {openId === t.id ? '收起交付物' : t.kind === 'code' ? '查看交付说明' : '查看交付物'}
                     </button>
                     {openId === t.id && (
                       <div className="task-artifact-body">

@@ -20,6 +20,8 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-small-zh-v1.5")
 # 知识库文档目录与向量库文件
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", ROOT / "knowledge"))
 DB_PATH = Path(os.getenv("RAG_DB_PATH", ROOT / "data" / "rag.sqlite3"))
+# 任务执行的工作区（沙箱根目录）：代码类交付只允许写在这里
+WORKSPACE_DIR = Path(os.getenv("WORKSPACE_DIR", ROOT / "data" / "workspace"))
 
 # Agent
 MAX_TOOL_ROUNDS = int(os.getenv("MAX_TOOL_ROUNDS", "6"))

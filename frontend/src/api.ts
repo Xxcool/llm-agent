@@ -1,4 +1,4 @@
-import type { AgentEvent, HealthInfo, MessageFeedback, Plan, PlanStatus, Task } from './types'
+import type { AgentEvent, HealthInfo, MessageFeedback, Plan, PlanStatus, Task, TaskCheck } from './types'
 import type { ToolStep } from './types'
 
 /**
@@ -334,6 +334,24 @@ export async function runTask(taskId: number): Promise<Task> {
     const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
     throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
   }
+  const data = (await resp.json()) as { task: Task }
+  return data.task
+}
+
+/** 批准代码类交付：写入工作区沙箱并校验 */
+export async function applyTask(taskId: number): Promise<{ task: Task; written: string[]; checks: TaskCheck[] }> {
+  const resp = await fetch(`/api/tasks/${taskId}/apply`, { method: 'POST' })
+  if (!resp.ok) {
+    const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
+    throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
+  }
+  return (await resp.json()) as { task: Task; written: string[]; checks: TaskCheck[] }
+}
+
+/** 丢弃代码类交付（不落盘） */
+export async function discardTask(taskId: number): Promise<Task> {
+  const resp = await fetch(`/api/tasks/${taskId}/discard`, { method: 'POST' })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   const data = (await resp.json()) as { task: Task }
   return data.task
 }

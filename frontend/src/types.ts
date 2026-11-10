@@ -100,7 +100,24 @@ export interface ChatMessage {
 }
 
 /** 任务（P3 行动层）：由已确认方案拆解而来 */
-export type TaskStatus = 'pending' | 'running' | 'done' | 'failed'
+export type TaskStatus = 'pending' | 'running' | 'review' | 'done' | 'failed'
+export type TaskKind = 'doc' | 'code'
+
+export interface TaskFile {
+  path: string
+  /** 工作区是否已有同名文件（true = 修改，false = 新增） */
+  exists: boolean
+  added: number
+  removed: number
+  diff: string
+  content: string
+}
+
+export interface TaskCheck {
+  path: string
+  ok: boolean
+  detail: string
+}
 
 export interface Task {
   id: number
@@ -110,9 +127,14 @@ export interface Task {
   title: string
   detail: string
   output: string
+  kind: TaskKind
   status: TaskStatus
-  /** 执行产出的 Markdown 交付物 */
+  /** 执行产出的 Markdown 交付物（文档类）或交付说明（代码类） */
   artifact: string | null
+  /** 代码类交付：待审批文件与 diff */
+  files: TaskFile[] | null
+  /** 落盘后的确定性校验结果 */
+  checks: TaskCheck[] | null
   created_at?: string
   updated_at?: string
 }

@@ -44,8 +44,11 @@ class ChatStore:
               title TEXT,
               detail TEXT,
               output TEXT,
+              kind TEXT DEFAULT 'doc',
               status TEXT DEFAULT 'pending',
               artifact TEXT,
+              files TEXT,
+              checks TEXT,
               created_at TEXT,
               updated_at TEXT
             );
@@ -70,6 +73,17 @@ class ChatStore:
             with self._lock:
                 self.conn.execute("ALTER TABLE messages ADD COLUMN plan TEXT")
                 self.conn.commit()
+        # 旧库迁移：tasks 补 kind / files / checks（P3/M4 代码类交付）
+        tcols = [r[1] for r in self.conn.execute("PRAGMA table_info(tasks)").fetchall()]
+        for col, ddl in (
+            ("kind", "ALTER TABLE tasks ADD COLUMN kind TEXT DEFAULT 'doc'"),
+            ("files", "ALTER TABLE tasks ADD COLUMN files TEXT"),
+            ("checks", "ALTER TABLE tasks ADD COLUMN checks TEXT"),
+        ):
+            if col not in tcols:
+                with self._lock:
+                    self.conn.execute(ddl)
+                    self.conn.commit()
 
     def create_session(self, title: str = "新会话") -> dict:
         sid = uuid.uuid4().hex[:12]
@@ -256,10 +270,15 @@ class ChatStore:
 
     # ---------- 任务（P3 行动层） ----------
 
-    _TASK_COLS = "id, session_id, message_id, plan_id, title, detail, output, status, artifact, created_at, updated_at"
+    _TASK_COLS = (
+        "id, session_id, message_id, plan_id, title, detail, output, kind, status, "
+        "artifact, files, checks, created_at, updated_at"
+    )
 
     @staticmethod
     def _task_row(r) -> dict:
+        import json
+
         return {
             "id": r[0],
             "session_id": r[1],
@@ -268,27 +287,30 @@ class ChatStore:
             "title": r[4],
             "detail": r[5],
             "output": r[6],
-            "status": r[7],
-            "artifact": r[8],
-            "created_at": r[9],
-            "updated_at": r[10],
+            "kind": r[7] or "doc",
+            "status": r[8],
+            "artifact": r[9],
+            "files": json.loads(r[10]) if r[10] else None,
+            "checks": json.loads(r[11]) if r[11] else None,
+            "created_at": r[12],
+            "updated_at": r[13],
         }
 
     def add_tasks(self, sid: str, message_id: int, tasks: List[dict]) -> List[dict]:
-        """批量写入方案拆解出的任务（同一消息重新拆解时先清理旧任务）。"""
+        """批量写入方案拆解出的任务（同一消息重新拆解时先清理未完成任务）。"""
         now = _now()
         with self._lock:
             self.conn.execute(
-                "DELETE FROM tasks WHERE message_id=? AND status!='done'", (message_id,)
+                "DELETE FROM tasks WHERE message_id=? AND status NOT IN ('done')", (message_id,)
             )
             ids = []
             for t in tasks:
                 cur = self.conn.execute(
-                    "INSERT INTO tasks (session_id, message_id, plan_id, title, detail, output, status, created_at, updated_at) "
-                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO tasks (session_id, message_id, plan_id, title, detail, output, kind, status, created_at, updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?)",
                     (
                         sid, message_id, t["plan_id"], t["title"], t.get("detail", ""),
-                        t.get("output", ""), t.get("status", "pending"), now, now,
+                        t.get("output", ""), t.get("kind", "doc"), t.get("status", "pending"), now, now,
                     ),
                 )
                 ids.append(cur.lastrowid)
@@ -315,18 +337,32 @@ class ChatStore:
             ).fetchone()
         return self._task_row(row) if row else None
 
-    def update_task(self, tid: int, status: str, artifact: Optional[str] = None) -> Optional[dict]:
+    def update_task(
+        self,
+        tid: int,
+        status: str,
+        artifact: Optional[str] = None,
+        files: Optional[list] = None,
+        checks: Optional[list] = None,
+    ) -> Optional[dict]:
         now = _now()
+        sets, args = ["status=?", "updated_at=?"], [status, now]
+        if artifact is not None:
+            sets.append("artifact=?")
+            args.append(artifact)
+        if files is not None:
+            import json
+
+            sets.append("files=?")
+            args.append(json.dumps(files, ensure_ascii=False))
+        if checks is not None:
+            import json
+
+            sets.append("checks=?")
+            args.append(json.dumps(checks, ensure_ascii=False))
+        args.append(tid)
         with self._lock:
-            if artifact is None:
-                cur = self.conn.execute(
-                    "UPDATE tasks SET status=?, updated_at=? WHERE id=?", (status, now, tid)
-                )
-            else:
-                cur = self.conn.execute(
-                    "UPDATE tasks SET status=?, artifact=?, updated_at=? WHERE id=?",
-                    (status, artifact, now, tid),
-                )
+            cur = self.conn.execute(f"UPDATE tasks SET {', '.join(sets)} WHERE id=?", args)
             self.conn.commit()
         if cur.rowcount == 0:
             return None

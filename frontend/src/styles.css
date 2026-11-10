@@ -1081,6 +1081,44 @@ body {
 .task-status.running { color: #a15c00; border-color: #f6e3c8; background: #fdf3e7; }
 .task-status.failed { color: #c53030; border-color: #f5c6c8; background: #fdecec; }
 .task-run { margin-left: auto; }
+.task-review-actions { margin-left: auto; display: inline-flex; gap: 8px; }
+.task-kind {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 5px;
+  background: #eef1f8; color: #4c5a7a;
+}
+.task-kind.code { background: #eef4ff; color: #2f5bd0; }
+.task-status.review { color: #2f5bd0; border-color: #cfe0f8; background: #eef4ff; }
+
+/* 代码类交付：文件与 diff 预览 */
+.task-files { margin: 8px 0 0 31px; display: flex; flex-direction: column; gap: 8px; }
+.task-files-hint { font-size: 12px; color: var(--text-dim); margin: 0; }
+.task-file { border: 1px solid #e8ecf5; border-radius: 10px; overflow: hidden; background: #fff; }
+.task-file-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 11px; background: #f8fafd; border-bottom: 1px solid #eef0f4;
+}
+.task-file-path { font-size: 12px; color: var(--text); font-family: var(--font-mono, ui-monospace, monospace); }
+.task-file-flag {
+  font-size: 10.5px; padding: 1px 6px; border-radius: 4px;
+  background: #eafaf1; color: #157347;
+}
+.task-file-flag.mod { background: #fdf3e7; color: #a15c00; }
+.task-file-stat { margin-left: auto; display: inline-flex; gap: 8px; font-size: 11.5px; }
+.task-file-stat .add { color: #157347; font-weight: 500; }
+.task-file-stat .del { color: #c53030; font-weight: 500; }
+.task-diff {
+  margin: 0; padding: 8px 0; max-height: 260px; overflow: auto;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px; line-height: 1.55; background: #fff;
+}
+.task-diff span { display: block; padding: 0 11px; white-space: pre-wrap; word-break: break-word; }
+.task-diff .d-add { background: #f0fbf4; color: #14733f; }
+.task-diff .d-del { background: #fdf1f1; color: #a32d2d; }
+.task-diff .d-hunk { color: #6b7893; background: #f6f8fc; }
+.task-checks { margin: 8px 0 0 31px; display: flex; flex-direction: column; gap: 4px; }
+.task-check { font-size: 11.5px; color: var(--text-dim); }
+.task-check.ok { color: #157347; }
+.task-check.err { color: #c53030; }
 /* 详情与标题左对齐（序号 22 + 间距 9 = 31px） */
 .task-detail { font-size: 12.5px; color: var(--text-dim); margin: 6px 0 0 31px; line-height: 1.6; }
 .task-output { font-size: 12px; color: #4c5a7a; margin: 3px 0 0 31px; }

@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-48%20passed-3fb950)](backend/tests)
+[![Tests](https://img.shields.io/badge/tests-50%20passed-3fb950)](backend/tests)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
 
@@ -27,9 +27,9 @@
 |---|---|
 | ![方案卡片](docs/screenshots/plan.png) | ![多方案对比](docs/screenshots/plan-compare.png) |
 
-| 任务看板 · 方案拆解与执行交付（P3 行动层） |
-|---|
-| ![任务看板](docs/screenshots/tasks.png) |
+| 任务看板 · 方案拆解与执行交付（P3 行动层） | 代码交付 · diff 预览与批准落盘（M4） |
+|---|---|
+| ![任务看板](docs/screenshots/tasks.png) | ![代码 diff](docs/screenshots/code-diff.png) |
 
 ## 功能特性
 
@@ -38,7 +38,8 @@
 | **RAG 检索增强** | 段落感知分块（500 字符 / 50 重叠）→ 本地 bge-small-zh 向量化 → 余弦 Top-4 检索，相似度阈值 0.58 防硬凑；回答标注来源文件，可回溯原文 |
 | **方案模式（P2）** | 基于检索证据生成结构化方案卡片：目标 / 实施步骤 / **可溯源依据** / 风险与应对；方案需**人工确认**后才锁定，未确认不触发任何执行 |
 | **多方案对比（M2）** | 同一诉求产出 2-3 个候选方案，按**成本 / 周期 / 风险**对比，模型标注推荐项；选定一个后其余候选自动驳回 |
-| **任务拆解与执行（P3）** | 已确认方案一键拆解为 3-6 个可执行任务（含做法与预期产出），逐任务执行生成 **Markdown 交付物**并在看板中预览 |
+| **任务拆解与执行（P3）** | 已确认方案一键拆解为 3-6 个可执行任务（含类型/做法/预期产出），逐任务执行生成 **Markdown 交付物**并在看板中预览 |
+| **代码交付与 diff 审批（M4）** | 代码类任务产出**文件 diff 预览**，人工批准后写入工作区沙箱，自动做 Python 语法 / JSON 解析校验；路径白名单防穿越，命令执行默认关闭 |
 | **Function Calling** | 智能体按需调用 `search_knowledge`（知识库检索）与 `fetch_url`（网页正文抓取），工具结果回填后继续推理，最多 6 轮闭环 |
 | **SSE 流式输出** | 前端用 `fetch + ReadableStream` 自行解析 SSE（POST 场景，不用 EventSource），打字机式渲染 |
 | **思考型模型兼容** | 适配 DeepSeek 等思考模型：工具调用轮回传 `reasoning_content`，避免 400 |
@@ -47,7 +48,7 @@
 | **富文本渲染** | 代码块（高亮/复制/下载）、表格（复制 CSV）、mermaid 流程图、LaTeX 公式、图片/音视频/文件卡片 |
 | **消息操作** | 复制 / 重新生成 / 朗读（Edge 神经语音 + 播放声波动画）/ 点赞点踩（原因面板，持久化） |
 | **会话管理** | 搜索、置顶、重命名、多选批量操作、空会话不落库 |
-| **测试体系** | 48 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 真实链路端到端验证脚本 |
+| **测试体系** | 50 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 真实链路端到端验证脚本 |
 
 ## 架构
 
@@ -194,7 +195,9 @@ LLM_MODEL=deepseek-flash
 | PATCH | `/api/messages/{id}/plan` | 方案状态流转（`draft` / `confirmed` / `rejected`），人工确认闸门 |
 | POST | `/api/messages/{id}/tasks` | 已确认方案拆解为任务（幂等；未确认返回 400） |
 | GET | `/api/sessions/{id}/tasks` | 会话内任务列表（看板数据） |
-| POST | `/api/tasks/{id}/run` | 执行单个任务，产出 Markdown 交付物落库 |
+| POST | `/api/tasks/{id}/run` | 执行单个任务：文档类产出 Markdown；代码类产出文件 diff（进入待审批） |
+| POST | `/api/tasks/{id}/apply` | 批准代码交付：写入工作区沙箱 + 语法/JSON 校验 |
+| POST | `/api/tasks/{id}/discard` | 丢弃待审批的代码文件（不落盘） |
 | GET/POST | `/api/config` | 读取 / 更新模型服务配置（Key 掩码回显，永不返回明文） |
 | POST | `/api/config/test` | 真实调用一次模型验证配置（不落盘） |
 | GET | `/api/knowledge` | 文档列表（含分块数） |
@@ -219,7 +222,7 @@ cd backend && .venv/bin/python -m pytest tests -q
 | `test_rag.py` | 4 | 入库增量、已删文件脏块清理、delete_source |
 | `test_agent.py` | 5 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验 |
 | `test_plans.py` | 7 | 方案规范化与校验、多候选 SSE、选择互斥、单方案兼容、非法参数容错 |
-| `test_tasks.py` | 4 | 任务拆解与幂等、未确认方案拦截、任务执行产出交付物、级联清理 |
+| `test_tasks.py` | 6 | 任务拆解与幂等、未确认方案拦截、文档交付、代码 diff 审批与落盘校验、路径穿越防护、级联清理 |
 | `test_api.py` | 10 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路、反馈、TTS、文件夹上传（含路径穿越防护） |
 
 真实链路（服务健康 → 配置连通 → 注入标记文档 → SSE 提问 → 断言检索命中 + 回答含标记 + 持久化 → 清理）：
@@ -273,12 +276,12 @@ llm-agent
 │   │   ├── embedder.py    # fastembed 本地 ONNX，失败降级 hash
 │   │   ├── store.py       # SQLite 会话与消息持久化
 │   │   ├── plans.py       # 结构化方案：规范化校验、多方案选择
-│   │   ├── tasks.py       # 任务：方案拆解、执行提示词与状态机
+│   │   ├── tasks.py       # 任务：拆解、执行、diff 生成与工作区落盘
 │   │   ├── tools.py       # search_knowledge / fetch_url / draft_plan
 │   │   └── config.py      # 环境变量与阈值
 │   ├── knowledge/         # 知识库目录（samples/ 为示例文档）
 │   ├── scripts/verify_real.py
-│   └── tests/             # 48 个用例，离线可跑
+│   └── tests/             # 50 个用例，离线可跑
 ├── frontend/
 │   └── src/
 │       ├── pages/         # Home / Chat

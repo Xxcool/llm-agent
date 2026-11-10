@@ -530,9 +530,9 @@ def breakdown_tasks(mid: int, body: TaskBreakdownIn):
 
 @app.post("/api/tasks/{tid}/run")
 def run_task(tid: int):
-    """执行单个任务：基于方案 + 知识库检索片段产出 Markdown 交付物。"""
+    """执行单个任务：文档类产出 Markdown；代码类产出文件 diff（待审批后落盘）。"""
     from .agent import _provider_error_message
-    from .tasks import run_prompt
+    from .tasks import build_diffs, code_run_prompt, parse_code_files, run_prompt
 
     store = _ensure_store()
     task = store.get_task(tid)
@@ -558,15 +558,61 @@ def run_task(tid: int):
 
     store.update_task(tid, "running")
     try:
+        if task.get("kind") == "code":
+            # 代码类：产出文件 → diff → 等人工批准（不自动落盘）
+            resp = _provider.chat([{"role": "user", "content": code_run_prompt(plan, task, context)}])
+            parsed = parse_code_files(resp.content or "")
+            root = Path(config.WORKSPACE_DIR) / task["session_id"]
+            diffs = build_diffs(root, parsed["files"])
+            # 待审批的文件内容暂存在 files 字段（含 diff 与全文），批准后才写盘
+            updated = store.update_task(
+                tid, "review", artifact=parsed["summary"], files=diffs
+            )
+            return {"status": "ok", "task": updated}
+
         resp = _provider.chat([{"role": "user", "content": run_prompt(plan, task, context)}])
         artifact = (resp.content or "").strip()
         if not artifact:
             raise RuntimeError("模型未返回交付内容")
-        updated = store.update_task(tid, "done", artifact)
+        updated = store.update_task(tid, "done", artifact=artifact)
         return {"status": "ok", "task": updated}
     except Exception as e:  # noqa: BLE001
         store.update_task(tid, "failed")
         raise HTTPException(status_code=502, detail=f"任务执行失败：{_provider_error_message(e)}") from e
+
+
+@app.post("/api/tasks/{tid}/apply")
+def apply_task_files(tid: int):
+    """批准代码类交付：把待审批文件写入工作区沙箱，并做确定性校验。"""
+    from .tasks import apply_files, verify_file
+
+    store = _ensure_store()
+    task = store.get_task(tid)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    files = task.get("files") or []
+    if not files:
+        raise HTTPException(status_code=400, detail="该任务没有待落盘文件")
+    root = Path(config.WORKSPACE_DIR) / task["session_id"]
+    try:
+        written = apply_files(root, files)
+    except Exception as e:  # noqa: BLE001 路径越界等安全问题
+        raise HTTPException(status_code=400, detail=f"落盘失败：{e}") from e
+    checks = [verify_file(root / rel) for rel in written]
+    ok = all(c["ok"] for c in checks)
+    updated = store.update_task(tid, "done" if ok else "failed", checks=checks)
+    return {"status": "ok", "written": written, "checks": checks, "task": updated}
+
+
+@app.post("/api/tasks/{tid}/discard")
+def discard_task_files(tid: int):
+    """丢弃待审批的代码交付（不落盘）。"""
+    store = _ensure_store()
+    task = store.get_task(tid)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    updated = store.update_task(tid, "pending", files=[])
+    return {"status": "ok", "task": updated}
 
 
 # ---------- 对话 ----------
