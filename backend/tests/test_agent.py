@@ -1,4 +1,5 @@
 """离线测试：RAG 检索 + Agent 循环 + 工具执行，全程 Mock Provider / Hash Embedder。"""
+import socket
 import sys
 from pathlib import Path
 
@@ -97,8 +98,6 @@ def test_validate_public_url_allows_public_ip():
 
 def test_fetch_text_rejects_redirect_to_private(monkeypatch):
     """首跳公网、302 跳到内网时必须拦截，不能跟随。"""
-    calls = []
-
     class FakeResponse:
         is_redirect = True
         headers = {"location": "http://127.0.0.1/secret"}
@@ -106,14 +105,57 @@ def test_fetch_text_rejects_redirect_to_private(monkeypatch):
         def close(self):
             return None
 
-    def fake_get(url, **kwargs):
-        calls.append(url)
-        return FakeResponse()
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
 
-    monkeypatch.setattr("app.tools.httpx.get", fake_get)
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def send(self, request):
+            return FakeResponse()
+
+    monkeypatch.setattr("app.tools.httpx.Client", FakeClient)
     with pytest.raises(ValueError, match="内网"):
         fetch_text("http://93.184.216.34/")
-    assert calls == ["http://93.184.216.34/"]
+
+
+def test_fetch_text_pins_resolved_ip(monkeypatch):
+    """实际连接必须使用已校验的 IP，同时保留原始 Host/SNI，防 DNS rebinding。"""
+    calls = []
+
+    class FakeResponse:
+        is_redirect = False
+        text = "<p>Hello</p>"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def send(self, request):
+            calls.append(request)
+            return FakeResponse()
+
+    monkeypatch.setattr("app.tools.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "app.tools.socket.getaddrinfo",
+        lambda *args, **kwargs: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 80))],
+    )
+    assert fetch_text("http://example.com/path?q=1") == "Hello"
+    assert str(calls[0].url) == "http://93.184.216.34/path?q=1"
+    assert calls[0].headers["host"] == "example.com"
 
 
 def test_plan_evidence_source_must_come_from_retrieval(tmp_path, monkeypatch):

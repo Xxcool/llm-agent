@@ -131,11 +131,11 @@ class ToolExecutor:
 MAX_REDIRECTS = 5
 
 
-def validate_public_url(url: str) -> None:
-    """校验抓取目标：仅 http/https，且域名解析出的地址必须是公网地址。
+def _resolve_public_ips(url: str):
+    """解析 URL 并校验所有地址都是公网地址，返回 (parsed, ip 字符串列表)。
 
-    防 SSRF：拒绝 localhost、内网、链路本地（如云元数据 169.254.169.254）、
-    保留地址等；用户信息（user:pass@host）也拒绝，避免目标歧义。
+    这里返回解析结果，后续请求会直接连接这些 IP（并保留 Host/SNI），
+    避免「校验时公网、实际连接时 DNS 重新绑定到内网」的问题。
     """
     parsed = urlsplit(url)
     if parsed.scheme not in ("http", "https"):
@@ -166,6 +166,7 @@ def validate_public_url(url: str) -> None:
     if not addrs:
         raise ValueError("域名没有可用地址")
 
+    public_ips: list[str] = []
     for ip in addrs:
         if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
             ip = ip.ipv4_mapped
@@ -179,19 +180,71 @@ def validate_public_url(url: str) -> None:
             or not ip.is_global
         ):
             raise ValueError("不允许访问内网或保留地址")
+        public_ips.append(str(ip))
+    return parsed, public_ips
+
+
+def validate_public_url(url: str) -> None:
+    """校验抓取目标：仅 http/https，且域名解析出的地址必须是公网地址。"""
+    _resolve_public_ips(url)
+
+
+def _host_header(parsed) -> str:
+    host = parsed.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    default_port = 443 if parsed.scheme == "https" else 80
+    port = parsed.port or default_port
+    return host if port == default_port else f"{host}:{port}"
+
+
+def _ip_url(parsed, ip: str) -> str:
+    host = f"[{ip}]" if ":" in ip else ip
+    default_port = 443 if parsed.scheme == "https" else 80
+    port = parsed.port or default_port
+    authority = host if port == default_port else f"{host}:{port}"
+    path = parsed.path or "/"
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+    return f"{parsed.scheme}://{authority}{path}"
 
 
 def _get_with_safe_redirects(url: str) -> httpx.Response:
-    """手动跟随重定向，每跳都重新做公网校验，避免 302 跳到内网。"""
+    """手动跟随重定向；每跳重新解析并直接连接已校验的 IP。
+
+    Host 头保留原始域名，HTTPS 通过 sni_hostname 扩展保留 SNI，
+    因此既能通过证书校验，也不会被 DNS rebinding 绕过。
+    """
     current = url
     for _ in range(MAX_REDIRECTS + 1):
-        validate_public_url(current)
-        resp = httpx.get(
-            current,
-            timeout=config.FETCH_URL_TIMEOUT,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; llm-agent-platform/0.1)"},
-            follow_redirects=False,
-        )
+        parsed, ips = _resolve_public_ips(current)
+        headers = {
+            "Host": _host_header(parsed),
+            "User-Agent": "Mozilla/5.0 (compatible; llm-agent-platform/0.1)",
+            "Accept": "text/html,application/xhtml+xml,text/plain,*/*",
+            "Accept-Encoding": "identity",
+        }
+        extensions = {"sni_hostname": parsed.hostname} if parsed.scheme == "https" else {}
+        resp = None
+        last_error = None
+        for ip in ips:
+            request = httpx.Request(
+                "GET", _ip_url(parsed, ip), headers=headers, extensions=extensions
+            )
+            try:
+                with httpx.Client(
+                    timeout=config.FETCH_URL_TIMEOUT,
+                    follow_redirects=False,
+                    trust_env=False,
+                ) as client:
+                    resp = client.send(request)
+                break
+            except httpx.TransportError as e:
+                last_error = e
+                continue
+        if resp is None:
+            raise last_error or ValueError("无法连接目标地址")
+
         if resp.is_redirect:
             location = resp.headers.get("location")
             resp.close()
