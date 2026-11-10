@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-37%20passed-3fb950)](backend/tests)
+[![Tests](https://img.shields.io/badge/tests-42%20passed-3fb950)](backend/tests)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可对话**的问答能力。
 
@@ -39,7 +39,7 @@
 | **富文本渲染** | 代码块（高亮/复制/下载）、表格（复制 CSV）、mermaid 流程图、LaTeX 公式、图片/音视频/文件卡片 |
 | **消息操作** | 复制 / 重新生成 / 朗读（Edge 神经语音 + 播放声波动画）/ 点赞点踩（原因面板，持久化） |
 | **会话管理** | 搜索、置顶、重命名、多选批量操作、空会话不落库 |
-| **测试体系** | 37 个 pytest 用例（store / llm / rag / agent / api 五层）+ 真实链路端到端验证脚本 |
+| **测试体系** | 42 个 pytest 用例（store / llm / rag / agent / plans / api 六层）+ 真实链路端到端验证脚本 |
 
 ## 架构
 
@@ -207,6 +207,7 @@ cd backend && .venv/bin/python -m pytest tests -q
 | `test_llm.py` | 10 | MockProvider 检索驱动行为、401/402/403/404/429 错误码映射、思考模型 `reasoning_content` 回传 |
 | `test_rag.py` | 4 | 入库增量、已删文件脏块清理、delete_source |
 | `test_agent.py` | 5 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验 |
+| `test_plans.py` | 5 | 方案规范化与校验、SSE plan 事件落库、确认闸门状态流转、非法参数容错 |
 | `test_api.py` | 10 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路、反馈、TTS、文件夹上传（含路径穿越防护） |
 
 真实链路（服务健康 → 配置连通 → 注入标记文档 → SSE 提问 → 断言检索命中 + 回答含标记 + 持久化 → 清理）：
@@ -259,11 +260,12 @@ llm-agent
 │   │   ├── rag.py         # 分块 / 向量入库 / 余弦检索 / 增量索引
 │   │   ├── embedder.py    # fastembed 本地 ONNX，失败降级 hash
 │   │   ├── store.py       # SQLite 会话与消息持久化
-│   │   ├── tools.py       # search_knowledge / fetch_url
+│   │   ├── plans.py       # 结构化方案：规范化校验与状态机
+│   │   ├── tools.py       # search_knowledge / fetch_url / draft_plan
 │   │   └── config.py      # 环境变量与阈值
 │   ├── knowledge/         # 知识库目录（samples/ 为示例文档）
 │   ├── scripts/verify_real.py
-│   └── tests/             # 37 个用例，离线可跑
+│   └── tests/             # 42 个用例，离线可跑
 ├── frontend/
 │   └── src/
 │       ├── pages/         # Home / Chat
@@ -271,27 +273,6 @@ llm-agent
 ├── docs/screenshots/      # README 演示截图
 ├── Dockerfile
 └── LICENSE
-```
-
-## 路线图
-
-当前已具备 **P1 感知层**（检索增强问答）。演进主线：**感知（检索）→ 规划（方案）→ 行动（执行）→ 记忆（沉淀）**。
-
-| 阶段 | 目标 | 状态 |
-|---|---|---|
-| P1 感知 · 检索 | 文档入库、语义检索、来源追溯、工具调用可观测 | ✅ 已完成 |
-| P2 规划 · 方案 | 基于检索证据生成结构化方案（背景/依据/步骤/风险），人工确认闸门 | 🚧 M1 已完成（方案卡片 + 确认闸门），M2 多方案对比待做 |
-| P3 行动 · 执行 | 方案拆解为任务 DAG 并逐项执行，产出可校验交付物（diff 审批 + 沙箱） | 📋 规划中 |
-| P4 记忆 · 沉淀 | 交付物归档回知识库，形成组织记忆飞轮 | 📋 规划中 |
-
-完整设计（能力拆解、验收标准、模块映射、里程碑）见 **[docs/ROADMAP.md](docs/ROADMAP.md)**。
-
-```mermaid
-flowchart LR
-    A["感知 · 检索<br/>P1 已完成"] --> B["规划 · 方案<br/>P2 下一步"]
-    B --> C["行动 · 执行<br/>P3 规划中"]
-    C --> D["记忆 · 沉淀<br/>P4 规划中"]
-    D -.->|"知识飞轮"| A
 ```
 
 ---
