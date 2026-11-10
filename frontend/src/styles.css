@@ -1459,3 +1459,64 @@ body {
   font-size: 12px;
   white-space: nowrap;
 }
+
+
+.knowledge-health {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin: 8px 0;
+  border-radius: 10px;
+  background: rgba(127, 127, 127, 0.06);
+  font-size: 12px;
+  color: var(--muted, #777);
+}
+
+.knowledge-health b {
+  color: var(--text, #222);
+}
+
+.knowledge-health .warn {
+  color: #b7791f;
+}
+
+.knowledge-reuse {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.knowledge-reuse input {
+  flex: 1;
+  min-width: 0;
+}
+
+.reuse-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.reuse-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.05);
+  font-size: 12px;
+}
+
+.reuse-src {
+  font-weight: 600;
+  color: var(--text, #222);
+}
+
+.reuse-quote {
+  color: var(--muted, #777);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

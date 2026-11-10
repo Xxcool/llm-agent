@@ -1,4 +1,5 @@
 """会话与消息持久化（SQLite，与向量库分文件）。"""
+import re
 import sqlite3
 import threading
 import uuid
@@ -269,6 +270,39 @@ class ChatStore:
                 (sid, limit),
             ).fetchall()
         return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+
+    def source_boosts(self) -> dict[str, float]:
+        """根据消息反馈计算来源质量微调值，供 RAG 检索重排。
+
+        反馈关联到 assistant 消息；该消息的 search_knowledge 结果中出现过的来源
+        记一次 up/down，最终按净值映射到 [-0.15, +0.15] 的分数偏移。
+        """
+        import json
+
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT steps, feedback FROM messages "
+                "WHERE role='assistant' AND feedback IS NOT NULL"
+            ).fetchall()
+        counts: dict[str, list[int]] = {}
+        for steps_raw, feedback_raw in rows:
+            try:
+                feedback = json.loads(feedback_raw or "null")
+                steps = json.loads(steps_raw or "[]")
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(feedback, dict) or feedback.get("type") not in ("up", "down"):
+                continue
+            for step in steps if isinstance(steps, list) else []:
+                if not isinstance(step, dict) or step.get("name") != "search_knowledge":
+                    continue
+                for src in re.findall(r"^\[([^\]]+)\]", step.get("result") or "", re.MULTILINE):
+                    item = counts.setdefault(src, [0, 0])
+                    item[0 if feedback["type"] == "up" else 1] += 1
+        return {
+            src: max(-0.15, min(0.15, up * 0.03 - down * 0.05))
+            for src, (up, down) in counts.items()
+        }
 
     # ---------- 任务（P3 行动层） ----------
 

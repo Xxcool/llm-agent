@@ -108,12 +108,14 @@ TOOLS_SCHEMA = [
 
 
 class ToolExecutor:
-    def __init__(self, rag: RagStore):
+    def __init__(self, rag: RagStore, boost_fn=None):
         self.rag = rag
+        self.boost_fn = boost_fn
 
     def run(self, name: str, args: dict) -> str:
         if name == "search_knowledge":
-            hits = self.rag.search(args["query"])
+            boosts = self.boost_fn() if self.boost_fn else None
+            hits = self.rag.search(args["query"], boosts=boosts)
             # 相似度阈值：最高分都达不到阈值说明知识库没覆盖该主题，
             # 宁可如实说没有也不要硬凑不相关内容污染回答
             hits = [h for h in hits if h[2] >= config.SCORE_THRESHOLD]

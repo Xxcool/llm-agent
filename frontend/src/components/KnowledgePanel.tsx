@@ -2,18 +2,24 @@ import { useEffect, useRef, useState } from 'react'
 import {
   addKnowledgeText,
   deleteKnowledge,
+  fetchKnowledgeHealth,
+  findReusable,
   importUrls,
   listKnowledge,
   uploadKnowledgeDir,
   uploadKnowledgeFile,
 } from '../api'
-import type { KnowledgeDoc } from '../api'
+import type { KnowledgeDoc, KnowledgeHealth, ReuseItem } from '../api'
 import { IconFile, IconFolder, IconLink, IconPencil, IconUpload, IconX } from './icons'
 
 type ImportMode = 'none' | 'paste' | 'url'
 
 export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; onChanged: () => void }) {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([])
+  const [health, setHealth] = useState<KnowledgeHealth | null>(null)
+  const [reuseQuery, setReuseQuery] = useState('')
+  const [reuseItems, setReuseItems] = useState<ReuseItem[]>([])
+  const [reuseLoading, setReuseLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -44,8 +50,14 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
     })
 
   const refresh = () => {
-    listKnowledge()
-      .then(setDocs)
+    Promise.all([
+      listKnowledge(),
+      fetchKnowledgeHealth().catch(() => null),
+    ])
+      .then(([list, h]) => {
+        setDocs(list)
+        setHealth(h)
+      })
       .catch(() => setMessage('无法读取知识库列表'))
       .finally(() => setLoading(false))
   }
@@ -98,6 +110,20 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
       setMessage(`已删除：${source}`)
     })
 
+  const handleReuse = async () => {
+    const q = reuseQuery.trim()
+    if (!q) return
+    setReuseLoading(true)
+    setMessage('')
+    try {
+      setReuseItems(await findReusable(q))
+    } catch (e) {
+      setMessage(`复用推荐失败：${(e as Error).message}`)
+    } finally {
+      setReuseLoading(false)
+    }
+  }
+
   return (
     <div className="modal-mask" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
@@ -110,6 +136,39 @@ export function KnowledgePanel({ onClose, onChanged }: { onClose: () => void; on
           知识库用于沉淀企业制度、产品文档、技术资料与业务流程。支持本地上传、文本录入与链接抓取，
           文档自动分块向量化，问答时被智能体检索并标注来源。
         </p>
+
+        {health && (
+          <div className="knowledge-health">
+            <span>文档 <b>{health.docs}</b></span>
+            <span>知识块 <b>{health.chunks}</b></span>
+            <span>已沉淀 <b>{health.archived}</b></span>
+            <span className={health.stale_count ? 'warn' : ''}>陈旧 <b>{health.stale_count}</b></span>
+          </div>
+        )}
+
+        <div className="knowledge-reuse">
+          <input
+            value={reuseQuery}
+            onChange={(e) => setReuseQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleReuse()
+            }}
+            placeholder="查找历史可复用方案 / 交付物…"
+          />
+          <button className="btn ghost small" onClick={handleReuse} disabled={reuseLoading || !reuseQuery.trim()}>
+            {reuseLoading ? '检索中…' : '复用推荐'}
+          </button>
+        </div>
+        {reuseItems.length > 0 && (
+          <div className="reuse-list">
+            {reuseItems.map((item) => (
+              <div key={item.source} className="reuse-item">
+                <span className="reuse-src">{item.source}</span>
+                <span className="reuse-quote">{item.quote}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="panel-actions">
           <button className="btn primary" onClick={() => folderRef.current?.click()} disabled={busy}>

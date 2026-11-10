@@ -25,7 +25,7 @@ flowchart LR
 | P1 | 感知 · 检索 | 让智能体「查得准、说得有依据」 | ✅ 已完成 |
 | P2 | 规划 · 方案 | 让输出从「一段话」变成「可确认的方案」 | ✅ M1 方案卡片 + 确认闸门；M2 多方案对比（已完成） |
 | P3 | 行动 · 执行 | 让方案变成「跑得动的任务」 | ✅ M3 拆解/看板/文档交付；M4 代码交付 + diff 审批（已完成；命令执行默认关闭） |
-| P4 | 记忆 · 沉淀 | 让每次交付都成为下次的资产 | 🚧 M5 产物归档（首增量已落地） |
+| P4 | 记忆 · 沉淀 | 让每次交付都成为下次的资产 | 🚧 M5 首增量：归档/复盘/反馈重排/健康度/复用 |
 
 ---
 
@@ -40,7 +40,7 @@ flowchart LR
 | 工具调用 | `search_knowledge` / `fetch_url`，最多 6 轮工具循环，思考模型 `reasoning_content` 兼容 |
 | 过程可观测 | SSE 事件流（tool_call / tool_result / token / done / error）+ 前端工具时间线 |
 | 来源追溯 | 回答标注来源文件，前端可展开查看检索到的原文片段 |
-| 质量保障 | 68 个 pytest 用例（含后续阶段）+ 18 个前端用例 + 真实链路端到端验证脚本 |
+| 质量保障 | 70 个 pytest 用例（含后续阶段）+ 18 个前端用例 + 真实链路端到端验证脚本 |
 
 **验收**：可对任意入库文档提问，回答包含来源标注，无关问题如实拒答。已验证通过。
 
@@ -157,6 +157,10 @@ flowchart LR
 - 幂等：重复归档返回已有路径；归档后通过 `ingest_dir` 进入知识库，可直接检索
 - 前端任务看板对已完成任务提供「归档到知识库」按钮，归档后显示「已归档」
 - 测试：`test_tasks.py` 覆盖归档落盘、检索可见、幂等与未完成拦截；`TaskBoard.test.tsx` 覆盖归档交互
+- 自动复盘：归档 Markdown 增加「自动复盘」段（做了什么/依据/交付结果/质量校验/结论）
+- 反馈驱动：assistant 消息的点赞/点踩映射为来源质量微调，`search_knowledge` 重排时生效
+- 知识健康度：`GET /api/knowledge/health` 返回文档/分块/沉淀/陈旧/缺失统计，前端知识库面板展示
+- 复用推荐：`GET /api/knowledge/reuse?q=` 从 `沉淀/` 历史交付物中检索，前端知识库面板提供入口
 
 ---
 
@@ -164,7 +168,7 @@ flowchart LR
 
 | 层 | 用例数 | 命令 | 覆盖范围 |
 |---|---|---|---|
-| 后端（pytest） | 68 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
+| 后端（pytest） | 70 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
 | 前端（vitest + Testing Library） | 18 | `cd frontend && npm test` | api 请求契约、方案卡片与多方案对比表、任务看板（拆解/执行/diff 审批）、Composer 交互 |
 | 真实链路（脚本） | 端到端 | `cd backend && .venv/bin/python scripts/verify_real.py` | 真实模型 + RAG 检索 + SSE + 持久化 |
 

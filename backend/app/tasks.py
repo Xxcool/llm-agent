@@ -284,6 +284,14 @@ def archive_markdown(task: Dict[str, Any], plan: Dict[str, Any] | None = None,
         ]
         lines.append("")
     lines += [
+        "## 自动复盘",
+        "",
+        f"- 做了什么：{task.get('title') or '任务执行'}",
+        f"- 方案依据：{len(plan.get('evidence') or [])} 条来源",
+        f"- 交付结果：{len(files)} 个文件" if files else "- 交付结果：Markdown 文档",
+        f"- 质量校验：{sum(1 for c in checks if c.get('ok'))}/{len(checks)} 通过" if checks else "- 质量校验：无自动校验项",
+        "- 结论：交付物已归档，可在后续相似诉求中检索复用。",
+        "",
         "## 追溯",
         "",
         f"- session_id：`{task.get('session_id', '')}`",

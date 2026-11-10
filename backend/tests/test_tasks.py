@@ -142,8 +142,14 @@ def test_breakdown_then_run_task(tmp_app):
     text = target.read_text(encoding="utf-8")
     assert "差旅报销" in text and "trace" not in text.lower()
     assert task["title"] in text
+    assert "## 自动复盘" in text
     assert client.post(f"/api/tasks/{tid}/archive").json()["cached"] is True
     assert source in [d["source"] for d in client.get("/api/knowledge").json()["docs"]]
+    health = client.get("/api/knowledge/health").json()
+    assert health["archived"] >= 1 and health["chunks"] >= 1
+    reuse = client.get("/api/knowledge/reuse", params={"q": "差旅报销"}).json()
+    assert any(item["source"] == source for item in reuse["items"])
+    assert client.get("/api/knowledge/reuse", params={"q": " "}).status_code == 400
 
     # 删除会话级联清理任务
     client.delete(f"/api/sessions/{sid}")

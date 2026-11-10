@@ -5,6 +5,7 @@ import io
 import json
 import re
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -95,7 +96,7 @@ def _ensure_state() -> RagStore:
         _rag = RagStore()
         n = _rag.ingest_dir(KNOWLEDGE_ROOT)
         print(f"[rag] 知识库索引就绪，共 {n} 个分块")
-        _executor = ToolExecutor(_rag)
+        _executor = ToolExecutor(_rag, boost_fn=lambda: _ensure_store().source_boosts())
         _provider = _make_provider()
     return _rag
 
@@ -269,6 +270,49 @@ def list_knowledge():
     _ensure_state()
     docs = [{"source": src, "chunks": n} for src, n in _rag.sources()]
     return {"docs": docs}
+
+
+@app.get("/api/knowledge/health")
+def knowledge_health():
+    """知识健康度：文档/分块/归档数量、陈旧文档、缺失文件。"""
+    _ensure_state()
+    now = time.time()
+    stale = []
+    missing = []
+    sources = _rag.sources()
+    for source, _chunks in sources:
+        path = KNOWLEDGE_ROOT / source
+        if not path.is_file():
+            missing.append(source)
+            continue
+        age_days = int((now - path.stat().st_mtime) // 86400)
+        if age_days > config.KNOWLEDGE_STALE_DAYS:
+            stale.append({"source": source, "age_days": age_days})
+    stale.sort(key=lambda x: -x["age_days"])
+    return {
+        "docs": len(sources),
+        "chunks": sum(n for _, n in sources),
+        "archived": sum(1 for src, _ in sources if src.startswith("沉淀/")),
+        "stale_count": len(stale),
+        "stale_docs": stale[:20],
+        "missing_docs": missing[:20],
+    }
+
+
+@app.get("/api/knowledge/reuse")
+def knowledge_reuse(q: str, limit: int = 3):
+    """复用推荐：从历史归档（沉淀/）中检索相似交付物。"""
+    _ensure_state()
+    if not q.strip():
+        raise HTTPException(400, "查询不能为空")
+    limit = max(1, min(limit, 10))
+    hits = _rag.search(q, top_k=30, boosts=_ensure_store().source_boosts())
+    items = [
+        {"source": src, "quote": text[:300], "score": score}
+        for src, text, score in hits
+        if src.startswith("沉淀/")
+    ]
+    return {"items": items[:limit]}
 
 
 class TextDocIn(BaseModel):
@@ -580,7 +624,10 @@ def run_task(tid: int):
     # 检索任务相关依据，避免执行产出脱离知识库
     context = ""
     try:
-        hits = _ensure_state().search(task["title"] + " " + (task.get("detail") or ""))
+        hits = _ensure_state().search(
+            task["title"] + " " + (task.get("detail") or ""),
+            boosts=_ensure_store().source_boosts(),
+        )
         hits = [h for h in hits if h[2] >= config.SCORE_THRESHOLD]
         context = "\n---\n".join(f"[{s}] {t}" for s, t, _ in hits)
     except Exception:  # noqa: BLE001 检索失败不阻塞执行

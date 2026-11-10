@@ -112,13 +112,20 @@ class RagStore:
             self.conn.commit()
         return cur.rowcount
 
-    def search(self, query: str, top_k: int = None) -> List[Tuple[str, str, float]]:
+    def search(
+        self,
+        query: str,
+        top_k: int = None,
+        boosts: dict[str, float] | None = None,
+    ) -> List[Tuple[str, str, float]]:
         top_k = top_k or config.TOP_K
         qv = self.embedder.embed([query])[0]
+        boosts = boosts or {}
         best: List[Tuple[str, str, float]] = []
         for source, text, vec in self.conn.execute("SELECT source, text, vec FROM chunks"):
             v = [float(x) for x in vec.split(",")]
-            score = sum(a * b for a, b in zip(qv, v))
-            best.append((source, text, score))
+            rel = source.rsplit(":", 1)[0]
+            score = sum(a * b for a, b in zip(qv, v)) + boosts.get(rel, 0.0)
+            best.append((rel, text, score))
         best.sort(key=lambda x: -x[2])
-        return [(s.rsplit(":", 1)[0], t, round(sc, 4)) for s, t, sc in best[:top_k]]
+        return [(rel, t, round(sc, 4)) for rel, t, sc in best[:top_k]]

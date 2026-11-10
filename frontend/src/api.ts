@@ -143,6 +143,34 @@ export async function listKnowledge(): Promise<KnowledgeDoc[]> {
   return data.docs
 }
 
+export interface KnowledgeHealth {
+  docs: number
+  chunks: number
+  archived: number
+  stale_count: number
+  stale_docs: { source: string; age_days: number }[]
+  missing_docs: string[]
+}
+
+export async function fetchKnowledgeHealth(): Promise<KnowledgeHealth> {
+  const resp = await apiFetch('/api/knowledge/health')
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return (await resp.json()) as KnowledgeHealth
+}
+
+export interface ReuseItem {
+  source: string
+  quote: string
+  score: number
+}
+
+export async function findReusable(query: string, limit = 3): Promise<ReuseItem[]> {
+  const resp = await apiFetch(`/api/knowledge/reuse?q=${encodeURIComponent(query)}&limit=${limit}`)
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = (await resp.json()) as { items: ReuseItem[] }
+  return data.items
+}
+
 export async function addKnowledgeText(name: string, text: string): Promise<void> {
   const resp = await apiFetch('/api/knowledge/text', {
     method: 'POST',

@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-86%20passed-3fb950)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-88%20passed-3fb950)](.github/workflows/ci.yml)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
 
@@ -41,6 +41,7 @@
 | **任务拆解与执行（P3）** | 已确认方案一键拆解为 3-6 个可执行任务（含类型/做法/预期产出），逐任务执行生成 **Markdown 交付物**并在看板中预览 |
 | **代码交付与 diff 审批（M4）** | 代码类任务产出**文件 diff 预览**，人工批准后写入工作区沙箱，自动做 Python 语法 / JSON 解析校验；路径白名单防穿越，命令执行默认关闭 |
 | **交付归档（P4/M5）** | 已完成任务一键归档到 `knowledge/沉淀/<年月>/`，保留方案 → 任务 → 交付物追溯链，归档后进入知识库可检索 |
+| **知识健康与复用（P4）** | 知识库健康度（文档/分块/沉淀/陈旧）、历史交付物复用推荐、反馈驱动来源重排 |
 | **Function Calling** | 智能体按需调用 `search_knowledge`（知识库检索）与 `fetch_url`（网页正文抓取），工具结果回填后继续推理，最多 6 轮闭环 |
 | **SSE 流式输出** | 前端用 `fetch + ReadableStream` 自行解析 SSE（POST 场景，不用 EventSource）；最终回答逐 token 推送，工具调用与方案 JSON 仍整轮缓冲，保证可靠性 |
 | **思考型模型兼容** | 适配 DeepSeek 等思考模型：工具调用轮回传 `reasoning_content`，避免 400 |
@@ -49,7 +50,7 @@
 | **富文本渲染** | 代码块（高亮/复制/下载）、表格（复制 CSV）、mermaid 流程图、LaTeX 公式、图片/音视频/文件卡片 |
 | **消息操作** | 复制 / 重新生成 / 朗读（Edge 神经语音 + 播放声波动画）/ 点赞点踩（原因面板，持久化） |
 | **会话管理** | 搜索、置顶、重命名、多选批量操作、空会话不进入历史列表（前端首条消息时才创建） |
-| **测试体系** | 68 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 18 个前端用例 + 真实链路端到端验证脚本 |
+| **测试体系** | 70 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 18 个前端用例 + 真实链路端到端验证脚本 |
 
 ## 架构
 
@@ -207,6 +208,8 @@ LLM_MODEL=deepseek-flash
 | POST | `/api/tasks/{id}/apply` | 批准代码交付：写入工作区沙箱 + 语法/JSON 校验 |
 | POST | `/api/tasks/{id}/discard` | 丢弃待审批的代码文件（不落盘） |
 | POST | `/api/tasks/{id}/archive` | 把已完成任务交付物归档回知识库（P4/M5） |
+| GET | `/api/knowledge/health` | 知识健康度：文档/分块/沉淀/陈旧/缺失 |
+| GET | `/api/knowledge/reuse?q=` | 从历史归档中检索可复用交付物 |
 | GET/POST | `/api/config` | 读取 / 更新模型服务配置（Key 掩码回显，永不返回明文） |
 | POST | `/api/config/test` | 真实调用一次模型验证配置（不落盘） |
 | GET | `/api/knowledge` | 文档列表（含分块数） |
@@ -222,7 +225,7 @@ LLM_MODEL=deepseek-flash
 GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest、前端 vitest + 构建，以及 Docker 镜像构建。
 
 ```bash
-cd backend && .venv/bin/python -m pytest tests -q   # 后端 68 用例
+cd backend && .venv/bin/python -m pytest tests -q   # 后端 70 用例
 cd frontend && npm test                             # 前端 18 用例
 ```
 
@@ -238,9 +241,9 @@ cd frontend && npm test                             # 前端 18 用例
 
 | 模块 | 用例数 | 覆盖点 |
 |---|---|---|
-| `test_store.py` | 8 | 会话增删改查、置顶排序、标题自动生成、空会话过滤、反馈持久化、历史顺序 |
+| `test_store.py` | 9 | 会话增删改查、置顶排序、标题自动生成、空会话过滤、反馈持久化、历史顺序、反馈来源加权 |
 | `test_llm.py` | 15 | MockProvider 行为、错误码映射、思考模型 `reasoning_content`、流式 token/tool_calls 分片/reasoning/非法 JSON、Agent 增量 token |
-| `test_rag.py` | 5 | 入库增量、已删文件脏块清理、delete_source、LIKE 通配符转义 |
+| `test_rag.py` | 6 | 入库增量、已删文件脏块清理、delete_source、LIKE 通配符转义、来源加权重排 |
 | `test_agent.py` | 10 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验、SSRF 内网/重定向/IP 固定、方案依据来源校验 |
 | `test_plans.py` | 7 | 方案规范化与校验、多候选 SSE、选择互斥、单方案兼容、非法参数容错 |
 | `test_tasks.py` | 7 | 任务拆解与幂等、未确认方案拦截、文档交付、代码 diff 审批与落盘校验、绝对路径/穿越防护、任务状态守卫、文件数上限 |

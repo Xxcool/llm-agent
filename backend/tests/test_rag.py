@@ -76,3 +76,15 @@ def test_delete_source_escapes_like_wildcards(tmp_path):
     assert len(rag.sources()) == 2
     assert rag.delete_source("a_b.md") > 0
     assert [s for s, _ in rag.sources()] == ["axb.md"]
+
+
+def test_search_applies_source_boosts(tmp_path):
+    rag = make_rag(tmp_path)
+    kb = tmp_path / "kb"
+    kb.mkdir()
+    (kb / "a.md").write_text("alpha 主题", encoding="utf-8")
+    (kb / "b.md").write_text("beta 主题", encoding="utf-8")
+    rag.ingest_dir(kb)
+    assert rag.search("alpha")[0][0] == "a.md"
+    boosted = rag.search("alpha", boosts={"b.md": 1.0})
+    assert boosted[0][0] == "b.md"

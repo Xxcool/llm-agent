@@ -99,3 +99,22 @@ def test_delete_session_cascades_messages(tmp_path):
     store.delete_session(sid)
     assert store.get_messages(sid) == []
     assert store.get_session(sid) is None
+
+
+def test_source_boosts_from_feedback(tmp_path):
+    """点赞/点踩要能映射为来源质量微调，供检索重排使用。"""
+    store = make_store(tmp_path)
+    sid = store.create_session()["id"]
+    store.add_message(sid, "assistant", "回答", steps=[{
+        "name": "search_knowledge",
+        "arguments": {"query": "q"},
+        "result": "[a.md] 甲\n---\n[b.md] 乙",
+    }])
+    mid = store.get_messages(sid)[-1]["id"]
+    store.update_feedback(mid, {"type": "up", "reason": "有帮助"})
+    boosts = store.source_boosts()
+    assert boosts["a.md"] == 0.03 and boosts["b.md"] == 0.03
+
+    store.update_feedback(mid, {"type": "down", "reason": "信息虚假"})
+    boosts = store.source_boosts()
+    assert boosts["a.md"] == -0.05 and boosts["b.md"] == -0.05
