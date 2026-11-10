@@ -49,6 +49,10 @@ TOOLS_SCHEMA = [
                 "type": "object",
                 "properties": {
                     "title": {"type": "string", "description": "方案标题（简短，体现目标）"},
+                    "approach": {"type": "string", "description": "一句话说明本方案的核心思路（多候选之间必须不同）"},
+                    "cost": {"type": "string", "description": "成本量级估计，如「低」「约 2 人月」「预算 5 万」"},
+                    "duration": {"type": "string", "description": "实施周期估计，如「2 周」「1 个月」"},
+                    "risk_level": {"type": "string", "enum": ["低", "中", "高"], "description": "整体风险等级"},
                     "background": {"type": "string", "description": "背景与现状，说明为什么需要这个方案"},
                     "goal": {"type": "string", "description": "目标与预期结果（可衡量更好）"},
                     "steps": {
@@ -93,7 +97,7 @@ TOOLS_SCHEMA = [
                         "items": {"type": "string"},
                     },
                 },
-                "required": ["title", "steps"],
+                "required": ["title", "approach", "cost", "duration", "risk_level", "steps"],
             },
         },
     },

@@ -21,9 +21,9 @@
 |---|---|
 | ![知识库](docs/screenshots/knowledge.png) | ![模型接入](docs/screenshots/settings.png) |
 
-| 方案模式 · 结构化方案卡片（P2 规划层） |
-|---|
-| ![方案卡片](docs/screenshots/plan.png) |
+| 方案模式 · 结构化方案卡片（P2 规划层） | 多方案对比 · 成本/周期/风险权衡（M2） |
+|---|---|
+| ![方案卡片](docs/screenshots/plan.png) | ![多方案对比](docs/screenshots/plan-compare.png) |
 
 ## 功能特性
 
@@ -31,6 +31,7 @@
 |---|---|
 | **RAG 检索增强** | 段落感知分块（500 字符 / 50 重叠）→ 本地 bge-small-zh 向量化 → 余弦 Top-4 检索，相似度阈值 0.58 防硬凑；回答标注来源文件，可回溯原文 |
 | **方案模式（P2）** | 基于检索证据生成结构化方案卡片：目标 / 实施步骤 / **可溯源依据** / 风险与应对；方案需**人工确认**后才锁定，未确认不触发任何执行 |
+| **多方案对比（M2）** | 同一诉求产出 2-3 个候选方案，按**成本 / 周期 / 风险**对比，模型标注推荐项；选定一个后其余候选自动驳回 |
 | **Function Calling** | 智能体按需调用 `search_knowledge`（知识库检索）与 `fetch_url`（网页正文抓取），工具结果回填后继续推理，最多 6 轮闭环 |
 | **SSE 流式输出** | 前端用 `fetch + ReadableStream` 自行解析 SSE（POST 场景，不用 EventSource），打字机式渲染 |
 | **思考型模型兼容** | 适配 DeepSeek 等思考模型：工具调用轮回传 `reasoning_content`，避免 400 |

@@ -54,13 +54,25 @@ export interface PlanRisk {
 }
 
 export interface Plan {
+  /** 方案唯一 id（多方案对比与选择用） */
+  id: string
   title: string
+  /** 一句话思路（多方案对比用） */
+  approach: string
   background: string
   goal: string
   steps: PlanStep[]
   evidence: PlanEvidence[]
   risks: PlanRisk[]
   systems: string[]
+  /** 成本量级（如「低」「约 2 人月」） */
+  cost: string
+  /** 周期（如「2 周」） */
+  duration: string
+  /** 风险等级：低 / 中 / 高 */
+  risk_level: string
+  /** 模型推荐项 */
+  recommended: boolean
   status: PlanStatus
 }
 
@@ -83,8 +95,8 @@ export interface ChatMessage {
   dbId?: number
   created_at?: string
   feedback?: MessageFeedback
-  /** 结构化方案（模型调用 draft_plan 时附带） */
-  plan?: Plan
+  /** 结构化方案（模型调用 draft_plan 时附带，可多候选） */
+  plans?: Plan[]
 }
 
 export interface HealthInfo {

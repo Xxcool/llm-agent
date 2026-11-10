@@ -9,20 +9,25 @@ const STATUS_LABEL: Record<PlanStatus, string> = {
   rejected: '已驳回',
 }
 
-/** 方案卡片（P2 规划层）：有依据、可确认；确认前不触发任何执行动作 */
+/** 方案卡片（P2 规划层）：有依据、可确认；多方案时提供「选择此方案」 */
 export function PlanCard({
   plan,
   dbId,
+  multi = false,
   onChange,
 }: {
   plan: Plan
   /** 数据库消息 id：无 dbId 说明消息还在生成中，暂不能确认 */
   dbId?: number
-  onChange?: (plan: Plan) => void
+  /** 多方案对比场景：按钮文案改为「选择此方案」 */
+  multi?: boolean
+  onChange?: (plans: Plan[]) => void
 }) {
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
   const [checked, setChecked] = useState<Set<number>>(new Set())
+  // 多方案对比时默认折叠详情，避免多张长卡片堆叠
+  const [expanded, setExpanded] = useState(!multi)
   const [error, setError] = useState('')
 
   const update = async (status: PlanStatus) => {
@@ -30,7 +35,7 @@ export function PlanCard({
     setBusy(true)
     setError('')
     try {
-      const next = await updatePlanStatus(dbId, status)
+      const next = await updatePlanStatus(dbId, status, plan.id)
       onChange?.(next)
     } catch (e) {
       setError((e as Error).message)
@@ -49,8 +54,15 @@ export function PlanCard({
 
   const copyPlan = async () => {
     const lines: string[] = [`# ${plan.title}`, '']
+    if (plan.approach) lines.push(`**思路**：${plan.approach}`, '')
     if (plan.goal) lines.push(`**目标**：${plan.goal}`, '')
     if (plan.background) lines.push(`**背景**：${plan.background}`, '')
+    const tradeoff = [
+      plan.cost && `成本 ${plan.cost}`,
+      plan.duration && `周期 ${plan.duration}`,
+      plan.risk_level && `风险 ${plan.risk_level}`,
+    ].filter(Boolean)
+    if (tradeoff.length) lines.push(`**权衡**：${tradeoff.join(' · ')}`, '')
     lines.push('## 实施步骤')
     plan.steps.forEach((s, i) => lines.push(`${i + 1}. **${s.title}**${s.detail ? `：${s.detail}` : ''}`))
     if (plan.evidence.length) {
@@ -66,21 +78,43 @@ export function PlanCard({
     window.setTimeout(() => setCopied(false), 1500)
   }
 
+  const hasTradeoff = Boolean(plan.cost || plan.duration || plan.risk_level)
+  const dimmed = plan.status === 'rejected'
+
   return (
     <div className={`plan-card ${plan.status}`}>
       <div className="plan-head">
         <span className="plan-badge">方案</span>
         <h3 className="plan-title">{plan.title}</h3>
+        {plan.recommended && <span className="plan-recommend">推荐</span>}
         <span className={`plan-status ${plan.status}`}>{STATUS_LABEL[plan.status]}</span>
       </div>
 
-      {(plan.goal || plan.background) && (
-        <div className="plan-section">
-          <p className="plan-label">目标与背景</p>
-          {plan.goal && <p className="plan-goal">{plan.goal}</p>}
-          {plan.background && <p className="plan-text">{plan.background}</p>}
+      {hasTradeoff && (
+        <div className="plan-tradeoff">
+          {plan.cost && <span className="plan-tradeoff-item">成本 <b>{plan.cost}</b></span>}
+          {plan.duration && <span className="plan-tradeoff-item">周期 <b>{plan.duration}</b></span>}
+          {plan.risk_level && (
+            <span className={`plan-tradeoff-item risk-${plan.risk_level}`}>风险 <b>{plan.risk_level}</b></span>
+          )}
+          {multi && (
+            <button type="button" className="plan-expand" onClick={() => setExpanded((v) => !v)}>
+              {expanded ? '收起详情' : '展开详情'}
+            </button>
+          )}
         </div>
       )}
+
+      {expanded && (
+        <>
+          {(plan.approach || plan.goal || plan.background) && (
+            <div className="plan-section">
+              {plan.approach && <p className="plan-approach">思路：{plan.approach}</p>}
+              <p className="plan-label-inline">目标与背景</p>
+              {plan.goal && <p className="plan-goal">{plan.goal}</p>}
+              {plan.background && <p className="plan-text">{plan.background}</p>}
+            </div>
+          )}
 
       <div className="plan-section">
         <p className="plan-label">
@@ -143,6 +177,8 @@ export function PlanCard({
           ))}
         </div>
       )}
+        </>
+      )}
 
       {error && <p className="plan-error">{error}</p>}
 
@@ -153,9 +189,10 @@ export function PlanCard({
               className="btn primary small"
               disabled={busy || !dbId}
               onClick={() => update('confirmed')}
-              title={dbId ? '确认后方案锁定，作为执行依据' : '消息保存后可确认'}
+              title={dbId ? (multi ? '选择此方案，其余候选自动驳回' : '确认后方案锁定，作为执行依据') : '消息保存后可确认'}
             >
-              <IconCheck size={13} /> {dbId ? (busy ? '处理中…' : '确认方案') : '生成完成后可确认'}
+              <IconCheck size={13} />
+              {dbId ? (busy ? '处理中…' : multi ? '选择此方案' : '确认方案') : '生成完成后可确认'}
             </button>
             <button className="btn ghost small" disabled={busy || !dbId} onClick={() => update('rejected')}>
               驳回
@@ -165,9 +202,9 @@ export function PlanCard({
         {plan.status === 'confirmed' && (
           <span className="plan-hint">已确认。任务拆解与执行将在 P3 行动层开放。</span>
         )}
-        {plan.status === 'rejected' && (
+        {dimmed && (
           <button className="btn ghost small" disabled={busy || !dbId} onClick={() => update('draft')}>
-            重新打开
+            恢复为候选
           </button>
         )}
         <button className="btn ghost small" onClick={copyPlan}>

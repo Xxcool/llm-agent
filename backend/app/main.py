@@ -439,12 +439,14 @@ class PlanStatusIn(BaseModel):
     """方案状态流转：draft（待确认）/ confirmed（已确认）/ rejected（已驳回）"""
 
     status: str
+    # 多方案时必须指定选择哪一个；单方案可省略
+    plan_id: Optional[str] = None
 
 
 @app.patch("/api/messages/{mid}/plan")
 def update_message_plan(mid: int, body: PlanStatusIn):
-    """更新方案状态（人工确认闸门）。确认后才允许进入执行阶段。"""
-    from .plans import PLAN_STATUSES
+    """更新方案状态（人工确认闸门）。确认一个方案时，其余候选自动驳回。"""
+    from .plans import PLAN_STATUSES, apply_selection
 
     if body.status not in PLAN_STATUSES:
         raise HTTPException(status_code=422, detail=f"status 仅支持 {'/'.join(PLAN_STATUSES)}")
@@ -452,12 +454,20 @@ def update_message_plan(mid: int, body: PlanStatusIn):
     msg = store.get_message(mid)
     if not msg:
         raise HTTPException(status_code=404, detail="消息不存在")
-    plan = msg.get("plan")
-    if not plan:
+    plans = msg.get("plans") or []
+    if not plans:
         raise HTTPException(status_code=404, detail="该消息没有方案")
-    plan = {**plan, "status": body.status}
-    store.update_plan(mid, plan)
-    return {"status": "ok", "plan": plan}
+    plan_id = body.plan_id
+    if not plan_id:
+        if len(plans) > 1:
+            raise HTTPException(status_code=422, detail="多方案需指定 plan_id")
+        plan_id = plans[0].get("id")
+    try:
+        updated = apply_selection(plans, plan_id or "", body.status)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    store.update_plans(mid, updated)
+    return {"status": "ok", "plans": updated}
 
 
 @app.delete("/api/sessions/{sid}")
@@ -481,7 +491,7 @@ def chat(body: ChatIn):
     def gen():
         content_parts: list = []
         steps: list = []
-        plan_payload: dict | None = None
+        plans: list = []
         error_text: str | None = None
         for event in run_agent(
             _provider, _executor, body.message,
@@ -493,7 +503,7 @@ def chat(body: ChatIn):
             if event["type"] == "token":
                 content_parts.append(event["content"])
             elif event["type"] == "plan":
-                plan_payload = event["plan"]
+                plans.append(event["plan"])
             elif event["type"] == "tool_call":
                 steps.append({"name": event["name"], "arguments": event["arguments"]})
             elif event["type"] == "tool_result" and steps:
@@ -509,7 +519,7 @@ def chat(body: ChatIn):
             # 生成失败时把错误持久化为消息内容，刷新后依然可见（而不是空白）
             if error_text:
                 text = f"{text}\n\n⚠️ {error_text}".strip()
-            store.add_message(body.session_id, "assistant", text, steps, plan=plan_payload)
+            store.add_message(body.session_id, "assistant", text, steps, plan=plans or None)
 
     return EventSourceResponse(gen())
 

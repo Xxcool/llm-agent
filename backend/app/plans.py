@@ -3,8 +3,11 @@
 方案的定位：不是一段聊天文本，而是「有依据、可确认、可执行」的交付物。
 - 每条依据（evidence）必须能溯源到知识库来源文件；
 - 人工确认（confirmed）之前不允许进入执行阶段（P3）；
-- 结构固定，前端按卡片渲染，不依赖模型自由排版。
+- 结构固定，前端按卡片渲染，不依赖模型自由排版；
+- 多方案对比（M2）：同一诉求可产出 2-3 个候选，带成本/周期/风险权衡，
+  确认其中一个时其余自动驳回。
 """
+import uuid
 from typing import Any, Dict, List
 
 PLAN_STATUSES = ("draft", "confirmed", "rejected")
@@ -63,13 +66,20 @@ def normalize_plan(raw: Dict[str, Any]) -> Dict[str, Any]:
     systems = [_s(x, 60) for x in _list(raw.get("systems")) if _s(x, 60)]
 
     plan: Dict[str, Any] = {
+        "id": _s(raw.get("id"), 32) or uuid.uuid4().hex[:8],
         "title": _s(raw.get("title"), 80) or "解决方案",
+        "approach": _s(raw.get("approach"), 160),
         "background": _s(raw.get("background"), 600),
         "goal": _s(raw.get("goal"), 400),
         "steps": steps,
         "evidence": evidence,
         "risks": risks,
         "systems": systems,
+        # 对比维度（M2 多方案权衡）
+        "cost": _s(raw.get("cost"), 60),
+        "duration": _s(raw.get("duration"), 60),
+        "risk_level": _s(raw.get("risk_level"), 20),
+        "recommended": bool(raw.get("recommended")),
         "status": "draft",
     }
     if not plan["steps"]:
@@ -82,4 +92,33 @@ def set_status(plan: Dict[str, Any], status: str) -> Dict[str, Any]:
         raise ValueError(f"非法状态：{status}")
     out = dict(plan)
     out["status"] = status
+    return out
+
+
+def normalize_plan_list(value: Any) -> List[Dict[str, Any]]:
+    """把库里的方案字段归一为列表：兼容早期的单个方案对象（M1 存量数据）。"""
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        return [value]
+    if isinstance(value, list):
+        return [p for p in value if isinstance(p, dict)]
+    return []
+
+
+def apply_selection(plans: List[Dict[str, Any]], plan_id: str, status: str) -> List[Dict[str, Any]]:
+    """更新指定方案状态；确认其中一个时，其余自动驳回（多方案互斥）。"""
+    if status not in PLAN_STATUSES:
+        raise ValueError(f"非法状态：{status}")
+    if not any(p.get("id") == plan_id for p in plans):
+        raise ValueError("方案不存在")
+    out: List[Dict[str, Any]] = []
+    for p in plans:
+        if p.get("id") == plan_id:
+            out.append({**p, "status": status})
+        elif status == "confirmed" and p.get("status") == "draft":
+            # 选定一个方案后，其他候选自动驳回，避免多处「待确认」
+            out.append({**p, "status": "rejected"})
+        else:
+            out.append(dict(p))
     return out

@@ -4,7 +4,7 @@ import type { ChatMessage, ToolStep } from '../types'
 import { MessageBubble } from '../components/MessageBubble'
 import { Composer } from '../components/Composer'
 import { ToolTimeline } from '../components/ToolTimeline'
-import { PlanCard } from '../components/PlanCard'
+import { PlanGroup } from '../components/PlanGroup'
 import { IconBolt } from '../components/icons'
 
 let nextId = 1
@@ -228,7 +228,15 @@ export function ChatPage({
             typeQueueRef.current += event.content
             break
           case 'plan':
-            patch((msg) => ({ ...msg, plan: event.plan }))
+            // 多方案：同一轮可能产出多个候选，按 id 追加（同 id 覆盖）
+            patch((msg) => {
+              const existing = msg.plans ?? []
+              const idx = existing.findIndex((p) => p.id === event.plan.id)
+              const next = idx >= 0
+                ? existing.map((p, i) => (i === idx ? event.plan : p))
+                : [...existing, event.plan]
+              return { ...msg, plans: next }
+            })
             break
           case 'error':
             patch((msg) => ({ ...msg, error: event.message }))
@@ -320,12 +328,12 @@ export function ChatPage({
               {msg.role === 'assistant' && (
                 <div className="assistant-body">
                   {msg.steps.length > 0 && <ToolTimeline steps={msg.steps} />}
-                  {msg.plan && (
-                    <PlanCard
-                      plan={msg.plan}
+                  {msg.plans && msg.plans.length > 0 && (
+                    <PlanGroup
+                      plans={msg.plans}
                       dbId={msg.dbId}
-                      onChange={(p) =>
-                        setMessages((m) => m.map((x) => (x.id === msg.id ? { ...x, plan: p } : x)))
+                      onChange={(plans) =>
+                        setMessages((m) => m.map((x) => (x.id === msg.id ? { ...x, plans } : x)))
                       }
                     />
                   )}

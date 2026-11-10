@@ -221,8 +221,8 @@ export interface StoredMessage {
   steps: ToolStep[]
   created_at?: string
   feedback?: MessageFeedback
-  /** 结构化方案（含确认状态） */
-  plan?: Plan
+  /** 结构化方案列表（含确认状态） */
+  plans?: Plan[]
 }
 
 export async function createSession(): Promise<SessionInfo> {
@@ -284,17 +284,21 @@ export async function saveMessageFeedback(
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
 }
 
-/** 更新方案状态（人工确认闸门）：draft / confirmed / rejected */
-export async function updatePlanStatus(messageId: number, status: PlanStatus): Promise<Plan> {
+/** 更新方案状态（人工确认闸门）：确认一个方案时其余候选自动驳回 */
+export async function updatePlanStatus(
+  messageId: number,
+  status: PlanStatus,
+  planId?: string,
+): Promise<Plan[]> {
   const resp = await fetch(`/api/messages/${messageId}/plan`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, plan_id: planId }),
   })
   if (!resp.ok) {
     const detail = (await resp.json().catch(() => null)) as { detail?: string } | null
     throw new Error(detail?.detail ?? `HTTP ${resp.status}`)
   }
-  const data = (await resp.json()) as { plan: Plan }
-  return data.plan
+  const data = (await resp.json()) as { plans: Plan[] }
+  return data.plans
 }

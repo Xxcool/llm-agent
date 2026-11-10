@@ -115,6 +115,8 @@ class ChatStore:
             self.conn.commit()
 
     def get_messages(self, sid: str) -> List[dict]:
+        from .plans import normalize_plan_list
+
         with self._lock:
             rows = self.conn.execute(
                 "SELECT id, role, content, steps, feedback, plan, created_at "
@@ -130,7 +132,8 @@ class ChatStore:
                 "content": r[2],
                 "steps": json.loads(r[3] or "[]"),
                 "feedback": json.loads(r[4]) if r[4] else None,
-                "plan": json.loads(r[5]) if r[5] else None,
+                # 方案统一以列表返回（兼容 M1 存量的单个对象）
+                "plans": normalize_plan_list(json.loads(r[5]) if r[5] else None),
                 "created_at": r[6],
             }
             for r in rows
@@ -149,8 +152,10 @@ class ChatStore:
         return cur.rowcount > 0
 
     def get_message(self, mid: int) -> Optional[dict]:
-        """单条消息（含方案），用于方案状态更新的入参校验。"""
+        """单条消息（含方案列表），用于方案状态更新的入参校验。"""
         import json
+
+        from .plans import normalize_plan_list
 
         with self._lock:
             row = self.conn.execute(
@@ -165,23 +170,23 @@ class ChatStore:
             "content": row[2],
             "steps": json.loads(row[3] or "[]"),
             "feedback": json.loads(row[4]) if row[4] else None,
-            "plan": json.loads(row[5]) if row[5] else None,
+            "plans": normalize_plan_list(json.loads(row[5]) if row[5] else None),
             "created_at": row[6],
         }
 
-    def update_plan(self, mid: int, plan: dict) -> Optional[dict]:
-        """覆盖某条消息的方案 JSON（确认 / 驳回 / 编辑步骤）。返回最新方案。"""
+    def update_plans(self, mid: int, plans: list) -> Optional[list]:
+        """覆盖某条消息的方案列表（确认 / 驳回 / 多方案选择）。返回最新列表。"""
         import json
 
         with self._lock:
             cur = self.conn.execute(
                 "UPDATE messages SET plan=? WHERE id=?",
-                (json.dumps(plan, ensure_ascii=False), mid),
+                (json.dumps(plans, ensure_ascii=False), mid),
             )
             self.conn.commit()
         if cur.rowcount == 0:
             return None
-        return plan
+        return plans
 
     def add_message(
         self,
@@ -189,8 +194,9 @@ class ChatStore:
         role: str,
         content: str,
         steps: Optional[list] = None,
-        plan: Optional[dict] = None,
+        plan: Optional[object] = None,
     ) -> None:
+        """steps: 工具调用步骤；plan: 方案列表（M2 起为数组，兼容单个对象）。"""
         import json
 
         now = _now()
