@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -263,6 +264,29 @@ def update_session(sid: str, body: SessionUpdateIn):
     if result is None:
         raise HTTPException(status_code=404, detail="会话不存在")
     return result
+
+
+class MessageFeedbackIn(BaseModel):
+    type: str  # up / down / none（清除）
+    reason: Optional[str] = None
+    comment: Optional[str] = None
+
+
+@app.post("/api/messages/{mid}/feedback")
+def message_feedback(mid: int, body: MessageFeedbackIn):
+    if body.type not in ("up", "down", "none"):
+        raise HTTPException(status_code=422, detail="type 仅支持 up/down/none")
+    feedback = None
+    if body.type != "none":
+        feedback = {
+            "type": body.type,
+            "reason": body.reason,
+            "comment": body.comment,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+        }
+    if not _ensure_store().update_feedback(mid, feedback):
+        raise HTTPException(status_code=404, detail="消息不存在")
+    return {"status": "ok"}
 
 
 @app.delete("/api/sessions/{sid}")

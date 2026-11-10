@@ -45,6 +45,12 @@ class ChatStore:
             with self._lock:
                 self.conn.execute("ALTER TABLE sessions ADD COLUMN pinned INTEGER DEFAULT 0")
                 self.conn.commit()
+        # 旧库迁移：messages 补 feedback 列（点赞/点踩持久化）
+        mcols = [r[1] for r in self.conn.execute("PRAGMA table_info(messages)").fetchall()]
+        if "feedback" not in mcols:
+            with self._lock:
+                self.conn.execute("ALTER TABLE messages ADD COLUMN feedback TEXT")
+                self.conn.commit()
 
     def create_session(self, title: str = "新会话") -> dict:
         sid = uuid.uuid4().hex[:12]
@@ -106,15 +112,35 @@ class ChatStore:
     def get_messages(self, sid: str) -> List[dict]:
         with self._lock:
             rows = self.conn.execute(
-                "SELECT id, role, content, steps FROM messages WHERE session_id=? ORDER BY id",
+                "SELECT id, role, content, steps, feedback, created_at "
+                "FROM messages WHERE session_id=? ORDER BY id",
                 (sid,),
             ).fetchall()
         import json
 
         return [
-            {"id": r[0], "role": r[1], "content": r[2], "steps": json.loads(r[3] or "[]")}
+            {
+                "id": r[0],
+                "role": r[1],
+                "content": r[2],
+                "steps": json.loads(r[3] or "[]"),
+                "feedback": json.loads(r[4]) if r[4] else None,
+                "created_at": r[5],
+            }
             for r in rows
         ]
+
+    def update_feedback(self, mid: int, feedback: Optional[dict]) -> bool:
+        """写入/清除某条消息的反馈；feedback 为 None 表示清除。"""
+        import json
+
+        with self._lock:
+            cur = self.conn.execute(
+                "UPDATE messages SET feedback=? WHERE id=?",
+                (json.dumps(feedback, ensure_ascii=False) if feedback else None, mid),
+            )
+            self.conn.commit()
+        return cur.rowcount > 0
 
     def add_message(self, sid: str, role: str, content: str, steps: Optional[list] = None) -> None:
         import json

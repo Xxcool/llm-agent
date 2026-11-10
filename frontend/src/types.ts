@@ -28,6 +28,14 @@ export interface ToolStep {
   result?: string
 }
 
+/** 消息反馈（点赞/点踩，持久化到数据库） */
+export interface MessageFeedback {
+  type: 'up' | 'down'
+  reason?: string
+  comment?: string
+  created_at?: string
+}
+
 export interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
@@ -35,6 +43,10 @@ export interface ChatMessage {
   /** assistant 消息附带的工具调用过程（可视化时间线） */
   steps: ToolStep[]
   error?: string
+  /** 数据库中的真实消息 id（持久化反馈用），本地新消息暂无 */
+  dbId?: number
+  created_at?: string
+  feedback?: MessageFeedback
 }
 
 export interface HealthInfo {

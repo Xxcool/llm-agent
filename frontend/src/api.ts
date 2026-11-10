@@ -1,4 +1,4 @@
-import type { AgentEvent, HealthInfo } from './types'
+import type { AgentEvent, HealthInfo, MessageFeedback } from './types'
 import type { ToolStep } from './types'
 
 /**
@@ -177,6 +177,8 @@ export interface StoredMessage {
   role: 'user' | 'assistant'
   content: string
   steps: ToolStep[]
+  created_at?: string
+  feedback?: MessageFeedback
 }
 
 export async function createSession(): Promise<SessionInfo> {
@@ -223,4 +225,17 @@ export async function getSession(id: string): Promise<SessionInfo> {
   const resp = await fetch(`/api/sessions/${id}`)
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return (await resp.json()) as SessionInfo
+}
+
+/** 保存消息反馈（点赞/点踩，type=none 表示清除） */
+export async function saveMessageFeedback(
+  messageId: number,
+  fb: { type: 'up' | 'down' | 'none'; reason?: string; comment?: string },
+): Promise<void> {
+  const resp = await fetch(`/api/messages/${messageId}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fb),
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
 }

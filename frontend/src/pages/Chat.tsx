@@ -58,15 +58,20 @@ export function ChatPage({
   }, [])
 
   // 加载会话历史与标题；若携带首条消息（首页跳转而来）自动发送
+  const loadMessages = () => {
+    return getSessionMessages(sessionId)
+      .then((rows) => {
+        setMessages(rows.map((r) => ({ ...r, id: nextId++, dbId: r.id })))
+      })
+      .catch(() => setMessages([]))
+  }
+
   useEffect(() => {
     let cancelled = false
     setMessages([])
     setTitle('')
-    getSessionMessages(sessionId)
-      .then((rows) => {
-        if (!cancelled) setMessages(rows.map((r) => ({ ...r, id: nextId++ })))
-      })
-      .catch(() => setMessages([]))
+    if (cancelled) return
+    void loadMessages()
     getSession(sessionId)
       .then((s) => {
         if (!cancelled) setTitle(s.title)
@@ -75,6 +80,7 @@ export function ChatPage({
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
   const refreshTitle = () => {
@@ -166,6 +172,8 @@ export function ChatPage({
         abortRef.current = null
         refreshSessions()
         refreshTitle()
+        // 静默重载：让新回复拿到数据库 id（反馈用）、落库时间戳与反馈状态
+        void loadMessages()
       })
   }
 
