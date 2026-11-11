@@ -24,7 +24,7 @@ def _parse_sse(text: str) -> list:
 
 
 def test_health_reports_mock_ok(tmp_app):
-    r = client.get("/api/health")
+    r = client.get("/api/status")
     assert r.status_code == 200
     d = r.json()
     assert d["provider"] == "mock"

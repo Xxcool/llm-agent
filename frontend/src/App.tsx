@@ -98,6 +98,12 @@ export default function App() {
 
   return (
     <div className="app">
+      {window.top !== window.self && (
+        <div className="workspace-notice" role="note">
+          为确保独立工作区正常保存，请在独立窗口使用。
+          <a href={window.location.href} target="_blank" rel="noreferrer">打开独立窗口</a>
+        </div>
+      )}
       <GridBackdrop />
 
       {isSession ? (

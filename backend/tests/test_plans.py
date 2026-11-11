@@ -112,6 +112,7 @@ def test_apply_selection_rejects_other_candidates():
 
 def test_chat_emits_multiple_plans_and_selection(tmp_app):
     """SSE 产出多个 plan 事件 → 列表持久化 → 选择其一时其余自动驳回。"""
+    _seed_evidence(tmp_app)
     tmp_app._provider = TwoPlanProvider()
     sid = client.post("/api/sessions").json()["id"]
     r = client.post("/api/chat", json={"message": "给出差旅报销线上化方案", "session_id": sid, "plan_mode": True})
@@ -161,14 +162,22 @@ def test_single_plan_can_confirm_without_plan_id(tmp_app):
                 return ChatResponse(tool_calls=[{"id": "c", "name": "draft_plan", "arguments": VALID_RAW}])
             return ChatResponse(content="已生成方案。")
 
+    _seed_evidence(tmp_app)
     tmp_app._provider = OnePlanProvider()
     sid = client.post("/api/sessions").json()["id"]
-    client.post("/api/chat", json={"message": "给个方案", "session_id": sid})
+    client.post("/api/chat", json={"message": "给个方案", "session_id": sid, "force_retrieval": True})
     mid = client.get(f"/api/sessions/{sid}/messages").json()["messages"][-1]["id"]
     r = client.patch(f"/api/messages/{mid}/plan", json={"status": "confirmed"})
     assert r.status_code == 200
     assert r.json()["plans"][0]["status"] == "confirmed"
     client.delete(f"/api/sessions/{sid}")
+
+
+def _seed_evidence(app):
+    sample = app.KNOWLEDGE_ROOT / VALID_RAW["evidence"][0]["source"]
+    sample.parent.mkdir(parents=True, exist_ok=True)
+    sample.write_text(VALID_RAW["evidence"][0]["quote"], encoding="utf-8")
+    app._rag.ingest_dir(app.KNOWLEDGE_ROOT)
 
 
 def test_invalid_plan_args_return_tool_error(tmp_app):

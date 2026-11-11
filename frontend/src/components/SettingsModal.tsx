@@ -52,7 +52,8 @@ export function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
   }, [modelListOpen, providerOpen])
 
   const hasSavedKey = Boolean(cfg?.has_key)
-  const keyReady = hasSavedKey || apiKey.trim().length > 0
+  const sameEndpoint = baseUrl.trim().replace(/\/$/, '') === cfg?.base_url.replace(/\/$/, '')
+  const keyReady = (hasSavedKey && sameEndpoint) || apiKey.trim().length > 0
 
   /** 按当前 API 地址识别服务商（匹配 host），给出对应模型建议 */
   const matchedProvider = useMemo((): ProviderPreset | null => {
@@ -148,6 +149,8 @@ export function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
           <button className="modal-close" onClick={onClose} aria-label="关闭"><IconX size={14} /></button>
         </div>
 
+        <p className="field-hint">此浏览器的对话、知识库和模型配置独立保存，无需登录。清除网站数据或换浏览器会进入新工作区。</p>
+
         <div className="field">
           <span className="field-label">服务商（仅支持 OpenAI 兼容协议 API）</span>
           <div className="provider-select" ref={providerSelectRef}>
@@ -233,7 +236,7 @@ export function SettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
                 type={showKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={hasSavedKey ? '留空继续使用已保存的 Key' : '输入你的 API Key'}
+                placeholder={hasSavedKey && sameEndpoint ? '留空继续使用已保存的 Key' : '输入此服务的 API Key'}
               />
               <button
                 type="button"

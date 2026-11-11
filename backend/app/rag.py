@@ -100,7 +100,7 @@ class RagStore:
             live = {
                 str(f.relative_to(root))
                 for f in root.rglob("*")
-                if f.is_file() and f.suffix.lower() in (".md", ".txt")
+                if f.is_file() and f.suffix.lower() in (".md", ".txt", ".markdown")
             }
             stale = [
                 r[0] for r in self.conn.execute("SELECT DISTINCT source FROM chunks").fetchall()
@@ -112,10 +112,11 @@ class RagStore:
                 self.conn.commit()
 
             for f in sorted(root.rglob("*")):
-                if not f.is_file() or f.suffix.lower() not in (".md", ".txt"):
+                if not f.is_file() or f.suffix.lower() not in (".md", ".txt", ".markdown"):
                     continue
                 rel = f.relative_to(root)
-                sig = f"{rel}{SIG_SEP}{f.stat().st_mtime_ns}{SIG_SEP}{CHUNK_VERSION}"
+                model = config.EMBED_MODEL if self.is_semantic else str(self.embedder.dim)
+                sig = f"{rel}{SIG_SEP}{f.stat().st_mtime_ns}{SIG_SEP}{CHUNK_VERSION}:{type(self.embedder).__name__}:{model}"
                 row = self.conn.execute(
                     "SELECT COUNT(*) FROM chunks WHERE source=?", (sig,)
                 ).fetchone()[0]

@@ -4,7 +4,30 @@ import type { ToolStep } from './types'
 /** 可选 API Token：与后端 API_TOKEN 对应，构建时通过 VITE_API_TOKEN 注入 */
 const API_TOKEN = import.meta.env.VITE_API_TOKEN
 
-export function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+let workspaceReady: Promise<void> | undefined
+
+function ensureWorkspace(): Promise<void> {
+  if (!workspaceReady) {
+    const headers = new Headers()
+    if (API_TOKEN) headers.set('X-API-Token', API_TOKEN)
+    workspaceReady = fetch('/api/workspace', { method: 'POST', headers, credentials: 'same-origin' })
+      .then(async (resp) => {
+        if (!resp.ok) throw new Error(`工作区初始化失败：HTTP ${resp.status}`)
+        const check = await fetch('/api/workspace', { headers, credentials: 'same-origin' })
+        if (!check.ok || !(await check.json()).cookie_ready) {
+          throw new Error('浏览器未保存工作区 Cookie，请允许此网站的 Cookie 并在独立窗口打开')
+        }
+      })
+      .catch((error) => {
+        workspaceReady = undefined
+        throw error
+      })
+  }
+  return workspaceReady
+}
+
+export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  if (String(input).startsWith('/api/') && String(input) !== '/api/health') await ensureWorkspace()
   const headers = new Headers(init.headers)
   if (API_TOKEN && String(input).startsWith('/api')) {
     headers.set('X-API-Token', API_TOKEN)
@@ -38,6 +61,7 @@ export interface ChatOptions {
   allow_fetch: boolean
   /** 方案模式：强制走 draft_plan 结构化方案链路（前端「方案模式」开关） */
   plan_mode?: boolean
+  replace_from_id?: number
 }
 
 export async function streamChat(
@@ -54,31 +78,39 @@ export async function streamChat(
     signal,
   })
   if (!resp.ok || !resp.body) {
-    throw new Error(`请求失败：HTTP ${resp.status}`)
+    const detail = await resp.json().then((body) => body.detail).catch(() => undefined)
+    throw new Error(typeof detail === 'string' ? detail : `请求失败：HTTP ${resp.status}`)
   }
 
   const reader = resp.body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
+  let terminal = false
+  const consume = (data: string) => {
+    if (!data || data === '[DONE]') return
+    let event: AgentEvent
+    try {
+      event = JSON.parse(data) as AgentEvent
+    } catch {
+      throw new Error('收到无法解析的流式消息，请重试')
+    }
+    if (event.type === 'done' || event.type === 'error') terminal = true
+    onEvent(event)
+  }
 
   // ReadableStream 逐块读取 → SSE 行解析 → JSON 反序列化
   for (;;) {
     const { done, value } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
-    buffer = parseSSEBuffer(buffer, (data) => {
-      if (!data || data === '[DONE]') return
-      try {
-        onEvent(JSON.parse(data) as AgentEvent)
-      } catch {
-        // 忽略无法解析的行（如 SSE 注释/心跳）
-      }
-    })
+    buffer = parseSSEBuffer(buffer, consume)
   }
+  parseSSEBuffer(buffer + decoder.decode() + '\n', consume)
+  if (!terminal) throw new Error('连接提前结束，回答可能不完整，请重试')
 }
 
 export async function fetchHealth(): Promise<HealthInfo> {
-  const resp = await apiFetch('/api/health')
+  const resp = await apiFetch('/api/status')
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
   return (await resp.json()) as HealthInfo
 }

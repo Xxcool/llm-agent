@@ -52,7 +52,8 @@ def main() -> int:
         # ---- 1. 后端存活 ----
         print("\n[1/4] 后端与服务状态")
         try:
-            health = c.get("/api/health").json()
+            c.get("/api/health").raise_for_status()
+            health = c.get("/api/status").json()
             step(health.get("status") == "ok", f"后端存活，provider={health.get('provider')}，知识块={health.get('chunks')}")
         except Exception as e:
             step(False, f"后端不可达：{e}")

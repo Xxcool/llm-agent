@@ -114,7 +114,14 @@ def run_agent(
     messages.extend(history or [])
     messages.append({"role": "user", "content": user_message})
     tools = _tools_schema(allow_fetch)
-    retrieved_sources: set[str] = set()
+    retrieved: dict[str, str] = {}
+
+    def remember_evidence(result: str) -> None:
+        for entry in result.split("\n---\n"):
+            match = re.match(r"^\[([^\]]+)\] (.*)", entry, re.DOTALL)
+            if match:
+                source, text = match.groups()
+                retrieved[source] = retrieved.get(source, "") + "\n" + text
 
     try:
         if force_retrieval or plan_mode:
@@ -124,7 +131,7 @@ def run_agent(
             except Exception as e:  # noqa: BLE001
                 result = f"检索失败：{e.__class__.__name__}: {e}"
             yield {"type": "tool_result", "name": "search_knowledge", "content": result}
-            retrieved_sources.update(_sources_from_search_result(result))
+            remember_evidence(result)
             # 以标准 assistant(tool_calls)+tool 消息形式回填，兼容 OpenAI 协议；
             # 思考型模型（DeepSeek flash/reasoner）要求该字段存在，空串即可
             call_id = "forced_search_1"
@@ -191,15 +198,14 @@ def run_agent(
                         # 由上层持久化到消息上、前端渲染为可确认的方案卡片
                         try:
                             plan = normalize_plan(tc["arguments"])
-                            if retrieved_sources:
-                                invalid = [
-                                    e["source"] for e in plan["evidence"]
-                                    if e.get("source") and e["source"] not in retrieved_sources
-                                ]
-                                if invalid:
-                                    raise ValueError(
-                                        "依据来源不在本轮检索结果中：" + "、".join(invalid[:3])
-                                    )
+                            if not retrieved or not plan["evidence"]:
+                                raise ValueError("没有可核验的知识库依据，请先补充资料或继续检索")
+                            for evidence in plan["evidence"]:
+                                source, quote = evidence["source"], evidence["quote"]
+                                if source not in retrieved:
+                                    raise ValueError("依据来源不在本轮检索结果中：" + source)
+                                if not quote or re.sub(r"\s+", "", quote) not in re.sub(r"\s+", "", retrieved[source]):
+                                    raise ValueError("依据摘录不在本轮检索原文中：" + source)
                             yield {"type": "plan", "plan": plan}
                             result = (
                                 f"方案已生成并展示给用户：{plan['title']}"
@@ -207,14 +213,14 @@ def run_agent(
                                 "已进入待确认状态，请用一两句话总结核心结论，并提示用户确认后再执行。"
                             )
                         except Exception as e:  # noqa: BLE001 方案参数不合法 → 让模型修正重试
-                            result = f"方案生成失败：{e}。请补全 steps（至少一个步骤）后重新调用 draft_plan。"
+                            result = f"方案生成失败：{e}。请修正依据和步骤；没有资料时说明缺口，不得编造方案。"
                     else:
                         try:
                             result = executor.run(tc["name"], tc["arguments"])
                         except Exception as e:  # noqa: BLE001 工具失败不中断对话
                             result = f"工具执行失败：{e.__class__.__name__}: {e}"
                         if tc["name"] == "search_knowledge":
-                            retrieved_sources.update(_sources_from_search_result(result))
+                            remember_evidence(result)
                     yield {"type": "tool_result", "name": tc["name"], "content": result}
                     messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
                 continue  # 工具结果回填后继续生成

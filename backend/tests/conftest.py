@@ -32,6 +32,7 @@ def tmp_app(tmp_path, monkeypatch):
     monkeypatch.setattr(app_main.config, "WORKSPACE_DIR", tmp_path / "workspace")
     monkeypatch.setattr(app_main.config, "SCORE_THRESHOLD", 0.0)  # Hash 向量分数量级不同，测试关闭阈值
     monkeypatch.setattr(app_main.config, "CLIENT_COOKIE_SECRET", "test-cookie-secret")
+    monkeypatch.setattr(app_main.config, "DB_PATH", tmp_path / "rag.sqlite3")
     app_main._health_cache.clear()
     app_main._workspaces.clear()
     yield app_main

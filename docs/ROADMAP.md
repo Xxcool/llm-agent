@@ -2,6 +2,8 @@
 
 > 从「知识问答平台」到「知识驱动的交付闭环」——让智能体不止回答，还能**按方案把事情做完**。
 
+> 范围说明：本页的「设计」「目标」「验收标准」含长期规划；里程碑完成状态仅对应各节「已落地」内容。当前已交付的是人工逐项执行的任务列表，没有 DAG 调度或运行中强制中断。现状以 README 和 ADR 为准。
+
 ## 一、定位
 
 **一句话**：面向企业知识资产的智能体平台——基于知识库证据生成结构化方案，按方案拆解任务并驱动执行，交付物沉淀回知识库形成组织记忆飞轮。
@@ -40,7 +42,7 @@ flowchart LR
 | 工具调用 | `search_knowledge` / `fetch_url`，最多 6 轮工具循环，思考模型 `reasoning_content` 兼容 |
 | 过程可观测 | SSE 事件流（tool_call / tool_result / token / done / error）+ 前端工具时间线 |
 | 来源追溯 | 回答标注来源文件，前端可展开查看检索到的原文片段 |
-| 质量保障 | 71 个 pytest 用例（含后续阶段）+ 18 个前端用例 + 真实链路端到端验证脚本 |
+| 质量保障 | pytest 后端与 Vitest 前端回归（数量以最新 CI 输出为准） + 真实链路端到端验证脚本 |
 
 **验收**：可对任意入库文档提问，回答包含来源标注，无关问题如实拒答。已验证通过。
 
@@ -56,9 +58,9 @@ flowchart LR
 | 方案卡片 | 前端渲染为可折叠卡片，依据展示来源与原文摘录（点击跳转原文待做）；步骤可勾选、编辑待做 |
 | 人工确认闸门 | 方案必须经用户确认（human-in-the-loop）才允许进入执行，未确认前纯只读 |
 | 多方案对比 | 提示词要求复杂诉求生成 2-3 个候选方案（成本/周期/风险权衡），由用户选择；当前不做强制数量校验 |
-| 方案落库 | 确认后的方案持久化到 `plans` 表，成为后续执行的输入 |
+| 方案落库 | 方案列表及确认状态持久化到 `messages.plan` JSON 字段，成为后续执行的输入 |
 
-**涉及模块**：`app/agent.py`（新增 `draft_plan` 工具与方案态提示词）、新建 `app/plans.py`（方案模型与存储）、`app/store.py`（plans 表）、前端新增 `PlanCard.tsx`、`Chat.tsx`（方案态渲染与确认交互）。
+**涉及模块**：`app/agent.py`（新增 `draft_plan` 工具与方案态提示词）、新建 `app/plans.py`（方案模型与存储）、`app/store.py`（messages.plan 字段）、前端新增 `PlanCard.tsx`、`Chat.tsx`（方案态渲染与确认交互）。
 
 **验收标准**：
 1. 提出一个制度/技术类诉求，产出包含「依据引用 + 步骤 + 风险」的结构化方案
@@ -99,7 +101,7 @@ flowchart LR
 | 每步可观测 | 每个任务产出 diff、日志与验收结果，失败可回滚，不进入下一步 |
 | 断点续跑 | 任务状态持久化，进程重启后可继续未完成任务 |
 
-**涉及模块**：新建 `app/tasks.py`（任务模型 + DAG 调度）、`app/executor_tools.py`（执行类工具与沙箱）、`app/store.py`（tasks / artifacts 表）、前端新增 `TaskBoard.tsx`。
+**实际模块**：`app/tasks.py`（任务规范化、diff、校验与文件事务）、`app/main.py`（接口编排）、`app/store.py`（tasks 表及产物字段）、前端 `TaskBoard.tsx`。DAG 调度、业务命令执行属于后续规划，当前没有 executor_tools.py 或独立 artifacts 表。
 
 **验收标准**：
 1. 确认方案后自动生成 ≥3 个带依赖关系的任务
@@ -144,7 +146,7 @@ flowchart LR
 | 知识健康度 | 文档覆盖率、检索命中率、陈旧文档提醒，驱动知识库治理 |
 | 复用推荐 | 新诉求先检索历史相似方案，给出「可复用资产」建议 |
 
-**涉及模块**：`app/rag.py`（归档入库）、新建 `app/knowledge_ops.py`（归档与摘要）、`app/store.py`（追溯产物→任务→方案链路）、前端知识库面板增加「沉淀」入口。
+**实际模块**：`app/tasks.py` 组织归档 Markdown 与规则化复盘，`app/main.py` 写入文档并调用 `app/rag.py` 入库，`app/store.py` 保存追溯字段；未单独建立 knowledge_ops.py。
 
 **验收标准**：
 1. 完成一次执行后可一键归档，产物出现在知识库并标注来源链路
@@ -168,8 +170,8 @@ flowchart LR
 
 | 层 | 用例数 | 命令 | 覆盖范围 |
 |---|---|---|---|
-| 后端（pytest） | 71 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
-| 前端（vitest + Testing Library） | 18 | `cd frontend && npm test` | api 请求契约、方案卡片与多方案对比表、任务看板（拆解/执行/diff 审批）、Composer 交互 |
+| 后端（pytest） | 见 CI 输出 | `cd backend && .venv/bin/python -m pytest tests -q` | store / llm / rag / agent / plans / tasks / api 七层，含方案闸门、多方案选择、任务拆解、代码 diff 与落盘校验 |
+| 前端（vitest + Testing Library） | 见 CI 输出 | `cd frontend && npm test` | api 请求契约、方案卡片与多方案对比表、任务看板（拆解/执行/diff 审批）、Composer 交互 |
 | 真实链路（脚本） | 端到端 | `cd backend && .venv/bin/python scripts/verify_real.py` | 真实模型 + RAG 检索 + SSE + 持久化 |
 
 CI：`.github/workflows/ci.yml` 在每次 push / PR 自动执行后端 pytest、前端 vitest 与前端构建。
@@ -202,3 +204,7 @@ CI：`.github/workflows/ci.yml` 在每次 push / PR 自动执行后端 pytest、
 ---
 
 *本文档随实现进度更新；完成一个阶段后在对应章节标注实际产出与偏差。*
+
+## 七、2026-11 接手加固
+
+已补齐方案互斥、审批重验、文件整组校验与写入回滚、空检索和摘录真实性校验、Markdown 扩展索引、消息编辑的数据库分支更新、无副作用健康检查、重启遗留任务恢复、富文本净化、安全打包与个人 Key 加密。部署采用免登录浏览器隔离，不接账号授权登录；免费创空间的可用性与数据边界见 docs/部署.md。

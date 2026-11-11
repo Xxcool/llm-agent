@@ -19,7 +19,8 @@ class ChatStore:
         self.db_path = Path(db_path or (Path(config.DB_PATH).parent / "chat.sqlite3"))
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self.active_sessions: set[str] = set()
         self.conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -64,6 +65,10 @@ class ChatStore:
             with self._lock:
                 self.conn.execute("ALTER TABLE sessions ADD COLUMN pinned INTEGER DEFAULT 0")
                 self.conn.commit()
+
+        # 单进程部署重启后，未完成的模型调用已经不存在；允许用户重新执行。
+        self.conn.execute("UPDATE tasks SET status='failed' WHERE status='running'")
+        self.conn.commit()
         # 旧库迁移：messages 补 feedback 列（点赞/点踩持久化）
         mcols = [r[1] for r in self.conn.execute("PRAGMA table_info(messages)").fetchall()]
         if "feedback" not in mcols:
@@ -141,10 +146,48 @@ class ChatStore:
 
     def delete_session(self, sid: str) -> None:
         with self._lock:
+            if sid in self.active_sessions:
+                raise RuntimeError("会话正在生成，请停止或等待完成后再删除")
             self.conn.execute("DELETE FROM messages WHERE session_id=?", (sid,))
             self.conn.execute("DELETE FROM tasks WHERE session_id=?", (sid,))
             self.conn.execute("DELETE FROM sessions WHERE id=?", (sid,))
             self.conn.commit()
+
+    def begin_turn(self, sid: str, content: str, replace_from_id: int | None = None) -> list:
+        """在同一事务边界裁剪旧分支，避免编辑只发生在浏览器内。"""
+        with self._lock:
+            if not self.get_session(sid):
+                raise LookupError("会话不存在")
+            if sid in self.active_sessions:
+                raise RuntimeError("该会话正在生成，请等待完成后重试")
+            if replace_from_id is not None:
+                anchor = self.get_message(replace_from_id)
+                if not anchor or anchor["session_id"] != sid:
+                    raise LookupError("消息不存在")
+                if anchor["role"] == "assistant":
+                    row = self.conn.execute(
+                        "SELECT id FROM messages WHERE session_id=? AND role='user' AND id<? ORDER BY id DESC LIMIT 1",
+                        (sid, replace_from_id),
+                    ).fetchone()
+                    if not row:
+                        raise ValueError("未找到原始提问")
+                    anchor = self.get_message(row[0])
+                mid = anchor["id"]
+                if any(t["message_id"] >= mid and t["status"] in ("running", "done") for t in self.list_tasks(sid)):
+                    raise RuntimeError("后续已有执行中或已完成的任务，请新建会话保留交付记录")
+                self.conn.execute("DELETE FROM tasks WHERE session_id=? AND message_id>=?", (sid, mid))
+                self.conn.execute("DELETE FROM messages WHERE session_id=? AND id>=?", (sid, mid))
+                if self.get_session(sid)["title"] == anchor["content"][:24]:
+                    self.conn.execute("UPDATE sessions SET title=? WHERE id=?", (content[:24], sid))
+                self.conn.commit()
+            history = self.history(sid)
+            self.add_message(sid, "user", content)
+            self.active_sessions.add(sid)
+            return history
+
+    def end_turn(self, sid: str) -> None:
+        with self._lock:
+            self.active_sessions.discard(sid)
 
     def get_messages(self, sid: str) -> List[dict]:
         from .plans import normalize_plan_list
@@ -338,7 +381,7 @@ class ChatStore:
         now = _now()
         with self._lock:
             self.conn.execute(
-                "DELETE FROM tasks WHERE message_id=? AND status NOT IN ('done')", (message_id,)
+                "DELETE FROM tasks WHERE message_id=? AND plan_id=? AND status NOT IN ('done')", (message_id, tasks[0]["plan_id"])
             )
             ids = []
             for t in tasks:

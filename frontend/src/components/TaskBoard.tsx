@@ -74,7 +74,7 @@ export function TaskBoard({
       const merged = { ...r.task, checks: r.checks }
       onTasks(tasks.map((t) => (t.id === task.id ? merged : t)))
       const failed = r.checks.filter((c) => !c.ok)
-      if (failed.length) setError(`已落盘，但 ${failed.length} 个文件校验未通过：${failed[0].detail}`)
+      if (failed.length) setError(`校验未通过，文件未落盘：${failed[0].detail}`)
     } catch (e) {
       setError((e as Error).message)
     } finally {

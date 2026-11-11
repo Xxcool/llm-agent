@@ -66,7 +66,8 @@ def normalize_plan(raw: Dict[str, Any]) -> Dict[str, Any]:
     systems = [_s(x, 60) for x in _list(raw.get("systems")) if _s(x, 60)]
 
     plan: Dict[str, Any] = {
-        "id": _s(raw.get("id"), 32) or uuid.uuid4().hex[:8],
+        # ID 由服务端产生，避免模型复用 ID 破坏候选互斥和任务归属。
+        "id": uuid.uuid4().hex[:12],
         "title": _s(raw.get("title"), 80) or "解决方案",
         "approach": _s(raw.get("approach"), 160),
         "background": _s(raw.get("background"), 600),
@@ -116,7 +117,7 @@ def apply_selection(plans: List[Dict[str, Any]], plan_id: str, status: str) -> L
     for p in plans:
         if p.get("id") == plan_id:
             out.append({**p, "status": status})
-        elif status == "confirmed" and p.get("status") == "draft":
+        elif status == "confirmed":
             # 选定一个方案后，其他候选自动驳回，避免多处「待确认」
             out.append({**p, "status": "rejected"})
         else:

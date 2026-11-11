@@ -1,5 +1,6 @@
 """FastAPI 入口：SSE 对话 + 运行时 LLM 配置 + 知识库管理。"""
 import hashlib
+import asyncio
 import hmac
 import io
 import json
@@ -7,13 +8,15 @@ import re
 import secrets
 import shutil
 import time
+import threading
 import uuid
 from contextvars import ContextVar
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
@@ -26,8 +29,51 @@ from .llm import BaseProvider, MockProvider, OpenAICompatProvider
 from .rag import RagStore
 from .store import ChatStore
 from .tools import ToolExecutor, fetch_text
+from .secrets import protect, reveal
+from .persistence import SnapshotManager
 
-app = FastAPI(title="LLM Agent 智能对话平台", version="0.2.0")
+_snapshots: Optional[SnapshotManager] = None
+
+
+def _checkpoint_data() -> None:
+    if _snapshots is not None:
+        _snapshots.mark_dirty()
+        try:
+            _snapshots.checkpoint()
+        except Exception as e:
+            print(f"[backup] snapshot failed: {type(e).__name__}")
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    global _snapshots
+    if config.SNAPSHOT_DIR:
+        _snapshots = SnapshotManager(Path(config.DB_PATH).parent, Path(config.SNAPSHOT_DIR))
+        await asyncio.to_thread(_snapshots.restore)
+
+    async def retry_backups():
+        while True:
+            await asyncio.sleep(30)
+            if _snapshots is not None:
+                with suppress(Exception):
+                    await asyncio.to_thread(_snapshots.checkpoint)
+
+    worker = asyncio.create_task(retry_backups())
+    try:
+        yield
+    finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
+        await asyncio.to_thread(_checkpoint_data)
+        for workspace in _workspaces.values():
+            workspace.store.conn.close()
+            workspace.rag.conn.close()
+        _workspaces.clear()
+        _snapshots = None
+
+
+app = FastAPI(title="LLM Agent 智能对话平台", version="0.3.0", lifespan=lifespan)
 
 
 @app.middleware("http")
@@ -71,6 +117,7 @@ _CLIENT_CTX: ContextVar[Optional[str]] = ContextVar("client_id", default=None)
 _workspaces: dict[str, "Workspace"] = {}
 _health_cache: dict[str, dict] = {}
 _shared_embedder = None
+_workspace_lock = threading.RLock()
 _HEALTH_TTL = 60.0  # 秒：模型探测有真实开销，结果缓存 1 分钟
 
 
@@ -127,16 +174,19 @@ def _load_runtime(client_id: Optional[str] = None) -> dict:
     path = _runtime_file(client_id)
     if path.exists():
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001 配置文件损坏时按未配置处理
-            return {}
+            return reveal(json.loads(path.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise RuntimeError("模型配置文件损坏，请从备份恢复") from e
     return {}
 
 
 def _save_runtime(cfg: dict, client_id: Optional[str] = None) -> None:
     path = _runtime_file(client_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(protect(cfg), ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.chmod(0o600)
+    tmp.replace(path)
     try:
         path.chmod(0o600)  # API Key 至少不落成全局可读
     except OSError:
@@ -149,7 +199,7 @@ def _make_provider(client_id: Optional[str] = None) -> BaseProvider:
         return MockProvider()
     rt = _load_runtime(client_id)
     base_url = rt.get("base_url") or config.LLM_BASE_URL
-    api_key = rt.get("api_key") or config.LLM_API_KEY
+    api_key = rt.get("api_key") or (config.LLM_API_KEY if not config.MULTI_TENANT else "")
     model = rt.get("model") or config.LLM_MODEL
     if api_key:
         return OpenAICompatProvider(base_url, api_key, model)
@@ -161,6 +211,7 @@ class Workspace:
 
     def __init__(self, client_id: str):
         self.client_id = client_id
+        self.last_used = time.monotonic()
         self.root = _client_root(client_id)
         self.knowledge_root = self.root / "knowledge"
         self.upload_dir = self.knowledge_root / "uploads"
@@ -181,9 +232,24 @@ class Workspace:
 
 def _workspace(client_id: Optional[str] = None) -> Workspace:
     cid = client_id or _current_client()
-    if cid not in _workspaces:
-        _workspaces[cid] = Workspace(cid)
-    return _workspaces[cid]
+    with _workspace_lock:
+        if cid not in _workspaces:
+            # 只释放长时间闲置的连接；数据仍留在磁盘，活跃生成和任务不受影响。
+            expiry = max(900, config.LLM_TIMEOUT + 60)
+            for old_id, old in list(_workspaces.items()):
+                if time.monotonic() - old.last_used > expiry and not old.store.active_sessions:
+                    with old.store._lock:
+                        if any(t[0] == "running" for t in old.store.conn.execute("SELECT status FROM tasks")):
+                            continue
+                        old.store.conn.close()
+                        old.rag.conn.close()
+                    del _workspaces[old_id]
+                    _health_cache.pop(old_id, None)
+            if len(_workspaces) >= config.MAX_OPEN_WORKSPACES:
+                raise HTTPException(503, "当前访问人数较多，请稍后重试")
+            _workspaces[cid] = Workspace(cid)
+        _workspaces[cid].last_used = time.monotonic()
+        return _workspaces[cid]
 
 
 def _ensure_store() -> ChatStore:
@@ -234,13 +300,14 @@ async def anonymous_workspace(request, call_next):
 
     MULTI_TENANT=0 时跳过分配，所有请求共用同一工作区（演示/单实例部署）。
     """
-    if not config.MULTI_TENANT:
+    if not config.MULTI_TENANT or not request.url.path.startswith("/api/") or request.url.path == "/api/health":
         return await call_next(request)
     raw = request.cookies.get(config.CLIENT_COOKIE_NAME)
     client_id = _decode_client_cookie(raw)
     new_client = client_id is None
     if new_client:
         client_id = uuid.uuid4().hex
+    request.state.cookie_ready = not new_client
     token = _CLIENT_CTX.set(client_id)
     try:
         response = await call_next(request)
@@ -255,6 +322,8 @@ async def anonymous_workspace(request, call_next):
             samesite="lax",
             secure=config.CLIENT_COOKIE_SECURE,
         )
+    if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path != "/api/workspace":
+        await asyncio.to_thread(_checkpoint_data)
     return response
 
 
@@ -264,6 +333,7 @@ class ChatIn(BaseModel):
     force_retrieval: bool = False  # 前端「知识检索」开关
     allow_fetch: bool = True  # 前端「网页抓取」开关
     plan_mode: bool = False  # 前端「方案模式」开关：强制走结构化方案链路
+    replace_from_id: Optional[int] = None
 
 
 class ConfigIn(BaseModel):
@@ -274,6 +344,19 @@ class ConfigIn(BaseModel):
 
 @app.get("/api/health")
 def health():
+    """无副作用的存活探针：监控不创建匿名工作区，也不调用付费模型。"""
+    return {"status": "ok", "storage_ok": _snapshots is None or _snapshots.last_error is None}
+
+
+@app.post("/api/workspace")
+@app.get("/api/workspace")
+def init_workspace(request: Request):
+    """浏览器先建立 Cookie，再并行请求配置、历史等接口。"""
+    return {"status": "ok", "cookie_ready": not config.MULTI_TENANT or getattr(request.state, "cookie_ready", False)}
+
+
+@app.get("/api/status")
+def model_status():
     state = _ensure_state()
     provider = _get_provider()
     cache = _health_cache.setdefault(_current_client(), {"ts": 0.0, "data": None})
@@ -291,6 +374,7 @@ def health():
         "chunks": chunks,
         # API 地址非敏感（不含 Key），前端据此识别服务商品牌并展示
         "base_url": rt.get("base_url") or config.LLM_BASE_URL,
+        "requires_key": config.REQUIRE_USER_API_KEY,
     }
     if provider.name == "openai":
         # 真实探测：只看「模型服务现在能不能用」，欠费/无效 Key 都会在这里暴露
@@ -306,6 +390,8 @@ def health():
         data["ok"] = True
     cache["ts"] = now
     cache["data"] = data
+    if _snapshots is not None and _snapshots.last_error:
+        data = {**data, "ok": False, "error": "数据备份失败，请暂缓写入并联系维护者"}
     return data
 
 
@@ -360,7 +446,7 @@ async def tts(text: str, voice: Optional[str] = None):
 def get_config():
     rt = _load_runtime()
     provider = _get_provider()
-    key = rt.get("api_key") or config.LLM_API_KEY
+    key = rt.get("api_key") or (config.LLM_API_KEY if not config.MULTI_TENANT else "")
     # 只回传掩码，不回传明文 Key
     if key and len(key) > 8:
         masked = f"{key[:4]}••••{key[-4:]}"
@@ -380,6 +466,9 @@ def get_config():
 @app.post("/api/config")
 def set_config(body: ConfigIn):
     rt = _load_runtime()
+    if body.base_url is not None and body.base_url.rstrip("/") != (rt.get("base_url") or config.LLM_BASE_URL).rstrip("/"):
+        # 防止切换服务地址时把原服务商的密钥发送到另一台服务器。
+        rt.pop("api_key", None)
     if body.base_url is not None:
         rt["base_url"] = body.base_url.strip()
     if body.model is not None:
@@ -409,7 +498,10 @@ class ConfigTestIn(BaseModel):
 def test_config(body: ConfigTestIn):
     """真实调用一次模型验证接入可用性（不落盘），返回可读的成功/失败结果。"""
     rt = _load_runtime()
-    key = (body.api_key or "").strip() or rt.get("api_key") or config.LLM_API_KEY
+    same_endpoint = body.base_url.rstrip("/") == (rt.get("base_url") or config.LLM_BASE_URL).rstrip("/")
+    key = (body.api_key or "").strip() or (rt.get("api_key") if same_endpoint else "")
+    if not config.MULTI_TENANT and same_endpoint:
+        key = key or config.LLM_API_KEY
     if not key:
         return {"ok": False, "error": "未填写 API Key"}
     provider = OpenAICompatProvider(body.base_url, key, body.model)
@@ -518,10 +610,10 @@ async def upload_knowledge_dir(
     saved: List[str] = []
     skipped: List[str] = []
     for f, rel in zip(files, paths):
-        rel = (rel or f.filename or "").replace("\\", "/").lstrip("/")
+        rel = (rel or f.filename or "").replace("\\", "/")
         if not rel:
             continue
-        if ".." in rel.split("/") or not rel.lower().endswith((".md", ".txt", ".markdown")):
+        if rel.startswith("/") or re.match(r"^[A-Za-z]:", rel) or ".." in rel.split("/") or not rel.lower().endswith((".md", ".txt", ".markdown")):
             skipped.append(rel)
             continue
         target = (upload / rel).resolve()
@@ -686,28 +778,32 @@ def update_message_plan(mid: int, body: PlanStatusIn):
     if body.status not in PLAN_STATUSES:
         raise HTTPException(status_code=422, detail=f"status 仅支持 {'/'.join(PLAN_STATUSES)}")
     store = _ensure_store()
-    msg = store.get_message(mid)
-    if not msg:
-        raise HTTPException(status_code=404, detail="消息不存在")
-    plans = msg.get("plans") or []
-    if not plans:
-        raise HTTPException(status_code=404, detail="该消息没有方案")
-    plan_id = body.plan_id
-    if not plan_id:
-        if len(plans) > 1:
-            raise HTTPException(status_code=422, detail="多方案需指定 plan_id")
-        plan_id = plans[0].get("id")
-    try:
-        updated = apply_selection(plans, plan_id or "", body.status)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    store.update_plans(mid, updated)
-    return {"status": "ok", "plans": updated}
+    with store._lock:
+        msg = store.get_message(mid)
+        if not msg:
+            raise HTTPException(status_code=404, detail="消息不存在")
+        plans = msg.get("plans") or []
+        if not plans:
+            raise HTTPException(status_code=404, detail="该消息没有方案")
+        plan_id = body.plan_id
+        if not plan_id:
+            if len(plans) > 1:
+                raise HTTPException(status_code=422, detail="多方案需指定 plan_id")
+            plan_id = plans[0].get("id")
+        try:
+            updated = apply_selection(plans, plan_id or "", body.status)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        store.update_plans(mid, updated)
+        return {"status": "ok", "plans": updated}
 
 
 @app.delete("/api/sessions/{sid}")
 def delete_session(sid: str):
-    _ensure_store().delete_session(sid)
+    try:
+        _ensure_store().delete_session(sid)
+    except RuntimeError as e:
+        raise HTTPException(409, str(e)) from e
     return {"status": "ok"}
 
 
@@ -717,7 +813,7 @@ class TaskBreakdownIn(BaseModel):
     plan_id: Optional[str] = None
 
 
-def _confirmed_plan(msg: dict, plan_id: Optional[str]) -> dict:
+def _confirmed_plan(msg: dict, plan_id: Optional[str], action: str = "拆解任务") -> dict:
     """取该消息里「已确认」的方案；未确认不允许拆解任务（人工确认闸门）。"""
     plans = msg.get("plans") or []
     target = None
@@ -728,7 +824,7 @@ def _confirmed_plan(msg: dict, plan_id: Optional[str]) -> dict:
     if not target:
         raise HTTPException(status_code=404, detail="未找到方案")
     if target.get("status") != "confirmed":
-        raise HTTPException(status_code=400, detail="方案尚未确认，不能拆解任务")
+        raise HTTPException(status_code=400, detail=f"方案尚未确认，不能{action}")
     return target
 
 
@@ -749,7 +845,7 @@ def breakdown_tasks(mid: int, body: TaskBreakdownIn):
     if not msg:
         raise HTTPException(status_code=404, detail="消息不存在")
     plan = _confirmed_plan(msg, body.plan_id)
-    existing = [t for t in store.list_tasks(msg["session_id"]) if t["message_id"] == mid]
+    existing = [t for t in store.list_tasks(msg["session_id"]) if t["message_id"] == mid and t["plan_id"] == plan["id"]]
     if existing:
         return {"tasks": existing, "cached": True}
 
@@ -797,7 +893,10 @@ def run_task(tid: int):
     except Exception:  # noqa: BLE001 检索失败不阻塞执行
         context = ""
 
-    store.update_task(tid, "running")
+    with store._lock:
+        if store.get_task(tid)["status"] in ("running", "review"):
+            raise HTTPException(409, "任务正在执行或等待审批，请先完成当前操作")
+        store.update_task(tid, "running", artifact="", files=[], checks=[], archive_path="")
     try:
         if task.get("kind") == "code":
             # 代码类：产出文件 → diff → 等人工批准（不自动落盘）
@@ -825,25 +924,35 @@ def run_task(tid: int):
 @app.post("/api/tasks/{tid}/apply")
 def apply_task_files(tid: int):
     """批准代码类交付：把待审批文件写入工作区沙箱，并做确定性校验。"""
-    from .tasks import apply_files, verify_file
+    from .tasks import FileValidationError, apply_files
 
     store = _ensure_store()
+    with store._lock:
+        return _apply_task_locked(store, tid, apply_files, FileValidationError)
+
+
+def _apply_task_locked(store, tid, apply_files, validation_error):
     task = store.get_task(tid)
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     if task.get("status") != "review":
         raise HTTPException(status_code=400, detail="任务不在待审批状态，不能批准落盘")
+    msg = store.get_message(task["message_id"])
+    if not msg:
+        raise HTTPException(404, "所属消息不存在")
+    _confirmed_plan(msg, task["plan_id"], "批准落盘")
     files = task.get("files") or []
     if not files:
         raise HTTPException(status_code=400, detail="该任务没有待落盘文件")
     root = _workspace_dir(task["session_id"])
     try:
-        written = apply_files(root, files)
+        written, checks = apply_files(root, files)
+    except validation_error as e:
+        updated = store.update_task(tid, "failed", checks=e.checks)
+        return {"status": "ok", "written": [], "checks": e.checks, "task": updated}
     except Exception as e:  # noqa: BLE001 路径越界等安全问题
         raise HTTPException(status_code=400, detail=f"落盘失败：{e}") from e
-    checks = [verify_file(root / rel) for rel in written]
-    ok = all(c["ok"] for c in checks)
-    updated = store.update_task(tid, "done" if ok else "failed", checks=checks)
+    updated = store.update_task(tid, "done", checks=checks)
     return {"status": "ok", "written": written, "checks": checks, "task": updated}
 
 
@@ -881,21 +990,26 @@ def archive_task(tid: int):
 def discard_task_files(tid: int):
     """丢弃待审批的代码交付（不落盘）。"""
     store = _ensure_store()
-    task = store.get_task(tid)
-    if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    if task.get("status") != "review":
-        raise HTTPException(status_code=400, detail="任务不在待审批状态，不能丢弃")
-    updated = store.update_task(tid, "pending", files=[])
-    return {"status": "ok", "task": updated}
+    with store._lock:
+        task = store.get_task(tid)
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        if task.get("status") != "review":
+            raise HTTPException(status_code=400, detail="任务不在待审批状态，不能丢弃")
+        updated = store.update_task(tid, "pending", files=[])
+        return {"status": "ok", "task": updated}
 
 
 # ---------- 对话 ----------
 
 @app.post("/api/chat")
 def chat(body: ChatIn):
+    if not body.message.strip():
+        raise HTTPException(400, "消息不能为空")
     _ensure_state()
     provider = _get_provider()
+    if config.REQUIRE_USER_API_KEY and provider.name == "mock":
+        raise HTTPException(400, "请先在接入模型服务中配置你自己的 API Key")
     executor = _get_executor()
     store = _ensure_store()
     history: list = []
@@ -903,41 +1017,59 @@ def chat(body: ChatIn):
     if body.session_id:
         # 先取历史（不含本轮），再落库本轮用户消息；否则同一句话会进入
         # history 后又被 run_agent 追加一次，导致模型上下文重复。
-        history = store.history(body.session_id)
-        store.add_message(body.session_id, "user", body.message)
+        try:
+            history = store.begin_turn(body.session_id, body.message, body.replace_from_id)
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+        except (RuntimeError, ValueError) as e:
+            raise HTTPException(409, str(e)) from e
 
     def gen():
         content_parts: list = []
         steps: list = []
         plans: list = []
         error_text: str | None = None
-        for event in run_agent(
-            provider, executor, body.message,
-            history=history,
-            force_retrieval=body.force_retrieval,
-            allow_fetch=body.allow_fetch,
-            plan_mode=body.plan_mode,
-        ):
-            if event["type"] == "token":
-                content_parts.append(event["content"])
-            elif event["type"] == "plan":
-                plans.append(event["plan"])
-            elif event["type"] == "tool_call":
-                steps.append({"name": event["name"], "arguments": event["arguments"]})
-            elif event["type"] == "tool_result" and steps:
-                for s in reversed(steps):
-                    if s["name"] == event["name"] and "result" not in s:
-                        s["result"] = event["content"]
-                        break
-            elif event["type"] == "error":
-                error_text = event["message"]
-            yield {"event": "message", "data": json.dumps(event, ensure_ascii=False)}
-        if body.session_id:
-            text = "".join(content_parts)
-            # 生成失败时把错误持久化为消息内容，刷新后依然可见（而不是空白）
-            if error_text:
-                text = f"{text}\n\n⚠️ {error_text}".strip()
-            store.add_message(body.session_id, "assistant", text, steps, plan=plans or None)
+        completed = False
+        try:
+            for event in run_agent(
+                provider, executor, body.message,
+                history=history,
+                force_retrieval=body.force_retrieval,
+                allow_fetch=body.allow_fetch,
+                plan_mode=body.plan_mode,
+            ):
+                if event["type"] == "done":
+                    completed = True
+                    continue
+                if event["type"] == "token":
+                    content_parts.append(event["content"])
+                elif event["type"] == "plan":
+                    plans.append(event["plan"])
+                elif event["type"] == "tool_call":
+                    steps.append({"name": event["name"], "arguments": event["arguments"]})
+                elif event["type"] == "tool_result" and steps:
+                    for s in reversed(steps):
+                        if s["name"] == event["name"] and "result" not in s:
+                            s["result"] = event["content"]
+                            break
+                elif event["type"] == "error":
+                    error_text = event["message"]
+                yield {"event": "message", "data": json.dumps(event, ensure_ascii=False)}
+        finally:
+            if body.session_id:
+                try:
+                    text = "".join(content_parts)
+                    if error_text:
+                        text = f"{text}\n\n⚠️ {error_text}".strip()
+                    elif not completed:
+                        text = f"{text}\n\n（生成已停止）".strip()
+                    store.add_message(body.session_id, "assistant", text, steps, plan=plans or None)
+                finally:
+                    store.end_turn(body.session_id)
+            _checkpoint_data()
+        # done 代表消息已经持久化，前端此时读取历史不会丢掉刚生成的回答。
+        if completed:
+            yield {"event": "message", "data": json.dumps({"type": "done"})}
 
     return EventSourceResponse(gen())
 
@@ -951,6 +1083,8 @@ if _FRONTEND_DIST.is_dir():
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str):
         """SPA 回退：命中真实文件返回文件，其余路径回 index.html（/api 路由注册在前，优先匹配）。"""
+        if full_path.startswith("api/"):
+            raise HTTPException(404, "接口不存在")
         candidate = (_FRONTEND_DIST / full_path).resolve()
         if (
             full_path

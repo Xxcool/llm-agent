@@ -1,15 +1,15 @@
 # LLM Agent 智能对话平台
 
-> **在线体验**：[企业知识智能体 · 打开即用](https://llm-agent.app.workbuddy.host/?sharecode=3L7EV2QDUO)
+> **部署方向**：魔搭创空间免费 CPU，访客免登录、各自配置 API Key、浏览器工作区互相隔离。部署步骤见 [部署说明](docs/部署.md)。免费资源可能休眠，不承诺常驻可用性。
 
 **企业知识驱动的 AI 智能体**：从知识库检索增强，到基于证据的**多方案对比与人工确认**，
 再到方案拆解为任务、逐项执行产出交付物——让企业知识从「问答」走向「交付」。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](backend/requirements.txt)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](frontend/package.json)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](backend/requirements.txt)
-[![Tests](https://img.shields.io/badge/tests-89%20passed-3fb950)](.github/workflows/ci.yml)
+[![CI](https://github.com/Xxcool/llm-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Xxcool/llm-agent/actions/workflows/ci.yml)
 
 一句话：把分散在制度、产品文档、技术资料里的企业知识，变成**可检索、可溯源、可确认、可交付**的生产力。
 
@@ -37,11 +37,11 @@
 
 | 能力 | 说明 |
 |---|---|
-| **RAG 检索增强** | 段落感知分块（500 字符分块，超长段落 50 字重叠）→ 本地 bge-small-zh 向量化 → 余弦 Top-4 检索，相似度阈值 0.58 防硬凑；回答标注来源文件，可回溯原文 |
+| **RAG 检索增强** | 按 Markdown 小节分块（500 字符，超长内容 50 字重叠）→ 本地 bge-small-zh 向量化 → 余弦 Top-4 检索，相似度阈值 0.58 防硬凑；回答标注来源文件，可回溯原文 |
 | **方案模式（P2）** | 基于检索证据生成结构化方案卡片：目标 / 实施步骤 / **可溯源依据** / 风险与应对；方案需**人工确认**后才锁定，未确认不触发任何执行 |
 | **多方案对比（M2）** | 同一诉求产出 2-3 个候选方案，按**成本 / 周期 / 风险**对比，模型标注推荐项；选定一个后其余候选自动驳回 |
 | **任务拆解与执行（P3）** | 已确认方案一键拆解为 3-6 个可执行任务（含类型/做法/预期产出），逐任务执行生成 **Markdown 交付物**并在看板中预览 |
-| **代码交付与 diff 审批（M4）** | 代码类任务产出**文件 diff 预览**，人工批准后写入工作区沙箱，自动做 Python 语法 / JSON 解析校验；路径白名单防穿越，命令执行默认关闭 |
+| **代码交付与 diff 审批（M4）** | 代码类任务产出**文件 diff 预览**，人工批准后写入工作区沙箱，先做 Python 语法 / JSON 解析校验，整组通过后才写入，写入异常恢复原文件；路径白名单防穿越，命令执行默认关闭 |
 | **匿名工作区** | 无需登录；每个浏览器一个签名 Cookie，独立会话/知识库/Provider 配置；换浏览器或清 Cookie 即新工作区 |
 | **交付归档（P4/M5）** | 已完成任务一键归档到 `knowledge/沉淀/<年月>/`，保留方案 → 任务 → 交付物追溯链，归档后进入知识库可检索 |
 | **知识健康与复用（P4）** | 知识库健康度（文档/分块/沉淀/陈旧）、历史交付物复用推荐、反馈驱动来源重排 |
@@ -53,7 +53,7 @@
 | **富文本渲染** | 代码块（高亮/复制/下载）、表格（复制 CSV）、mermaid 流程图、LaTeX 公式、图片/音视频/文件卡片 |
 | **消息操作** | 复制 / 重新生成 / 朗读（Edge 神经语音 + 播放声波动画）/ 点赞点踩（原因面板，持久化） |
 | **会话管理** | 搜索、置顶、重命名、多选批量操作、空会话不进入历史列表（前端首条消息时才创建） |
-| **测试体系** | 71 个 pytest 用例（store / llm / rag / agent / plans / tasks / api 七层）+ 18 个前端用例 + 真实链路端到端验证脚本 |
+| **测试体系** | pytest（store / llm / rag / agent / plans / tasks / api 与接手回归）+ Vitest 组件与 SSE/富文本安全回归 + 独立真实链路验证脚本 |
 
 ## 架构
 
@@ -140,16 +140,16 @@ cd backend
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 LLM_PROVIDER=mock .venv/bin/python -m uvicorn app.main:app --port 8000
 
-# 前端（另开终端）
+# 前端（另开终端，Node.js 22.12+；推荐 .nvmrc 指定版本）
 cd frontend
 npm install && npm run dev   # http://localhost:5173，已代理 /api 到 8000
 ```
 
-接入真实 LLM：前端「接入模型服务」面板在线配置（保存到 `backend/data/runtime_config.json`，不入仓库），
-也可用环境变量：
+接入真实 LLM：前端「接入模型服务」面板在线配置（加密保存到各自 `backend/data/clients/<client_id>/runtime_config.json`，不入仓库），
+仅本地单租户开发可使用环境变量 Key（公网多租户不复用平台 Key）：
 
 ```bash
-LLM_PROVIDER=openai \
+MULTI_TENANT=0 LLM_PROVIDER=openai \
 LLM_BASE_URL=https://api.deepseek.com \
 LLM_API_KEY=你的Key \
 LLM_MODEL=deepseek-flash
@@ -166,6 +166,12 @@ LLM_MODEL=deepseek-flash
 | `RAG_TOP_K` | `4` | 检索返回条数 |
 | `RAG_SCORE_THRESHOLD` | `0.58` | 检索相似度阈值，低于阈值不硬凑无关内容 |
 | `MAX_TOOL_ROUNDS` | `6` | Agent 工具循环上限 |
+| `DATA_DIR` | `backend/data` | 运行数据目录；公开部署须持久保存或开启快照 |
+| `SNAPSHOT_DIR` | 空（关闭） | 独立快照目录；魔搭设为 `/mnt/workspace/llm-agent-snapshots`，SQLite 留在本地盘 |
+| `REQUIRE_USER_API_KEY` | `0` | 设为 `1` 时，未配置个人 Key 的访问者不能调用模型 |
+| `CONFIG_ENCRYPTION_KEY` | 自动生成 | API Key 加密主密钥；自动生成时保存在数据目录，随快照备份 |
+| `MULTI_TENANT` | `1` | 公共平台保持 `1`，`0` 会让所有请求共用数据 |
+| `MAX_OPEN_WORKSPACES` | `128` | 内存中工作区上限；闲置连接可释放，磁盘数据不删除 |
 | `CLIENTS_DIR` | `backend/data/clients` | 匿名工作区根目录；每个浏览器一个子目录 |
 | `CLIENT_COOKIE_SECRET` | 自动生成 | 匿名 Cookie 签名密钥；生产建议显式设置 |
 | `CLIENT_COOKIE_SECURE` | `false` | HTTPS 部署时设为 `true` |
@@ -193,8 +199,10 @@ backend/data/clients/<client_id>/
 ├── rag.sqlite3         # 向量库
 ├── knowledge/          # 个人知识库
 ├── workspace/          # 代码交付沙箱
-└── runtime_config.json # 个人 Provider/Key 配置
+└── runtime_config.json # 个人 Provider 配置，API Key 加密保存
 ```
+
+API Key 使用 Fernet 加密，主密钥由平台维护者保管；加密不意味着维护者无法解密。跨浏览器或跨设备不自动合并数据。
 
 这是“浏览器级隔离”，不是多用户安全认证，也没有岗位权限、审计、跨设备同步。公司敏感数据或需要岗位权限时，仍应在反向代理/SSO 后面使用。
 
@@ -211,8 +219,8 @@ backend/data/clients/<client_id>/
 | 文本录入 | 短文档、FAQ、临时说明 | `uploads/<命名>.md` |
 | 链接导入 | 外部文档页、制度页面（单次最多 10 条） | `uploads/网页抓取/<标题>.md` |
 
-解析与检索规则：文档按段落合并分块（500 字符分块，超长段落 50 字重叠）→ 向量化 → SQLite 入库，
-按 `相对路径:mtime` 做增量重建（改动的文件重入库、删除的文件清理残留块）；
+解析与检索规则：文档按 Markdown 小节分块（500 字符，超长内容 50 字重叠）→ 向量化 → SQLite 入库，
+按相对路径、mtime、分块版本与向量模型签名做增量重建（改动的文件重入库、删除的文件清理残留块）；
 **来源即相对路径**（如 `samples/员工差旅与费用报销制度.md`），回答引用可直接回溯到目录与原文。
 
 > `backend/knowledge/personal/`（本地私有资料）与 `backend/data/`（向量库、运行时密钥）
@@ -222,8 +230,10 @@ backend/data/clients/<client_id>/
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/health` | 服务状态、当前模型与知识库分块数（真实探测模型可用性，缓存 60s） |
-| POST | `/api/chat` | SSE 对话（`message` / `session_id` / `force_retrieval` / `allow_fetch`） |
+| GET | `/api/health` | 无副作用存活探针，不创建工作区、不调用模型；含快照健康状态 |
+| POST | `/api/workspace` | 初始化匿名 Cookie，前端在其他 API 前串行完成 |
+| GET | `/api/status` | 当前工作区模型与知识库状态，模型探测缓存 60s |
+| POST | `/api/chat` | SSE 对话（`message` / `session_id` / `force_retrieval` / `allow_fetch` / `plan_mode` / `replace_from_id`） |
 | GET | `/api/tts` | 文本转语音（Edge 神经语音 MP3，默认晓晓；失败自动降级浏览器 TTS） |
 | POST | `/api/sessions` | 创建会话 |
 | GET | `/api/sessions` | 会话列表（只返回有消息的会话，按置顶 + 最近更新排序） |
@@ -241,7 +251,7 @@ backend/data/clients/<client_id>/
 | POST | `/api/tasks/{id}/archive` | 把已完成任务交付物归档回知识库（P4/M5） |
 | GET | `/api/knowledge/health` | 知识健康度：文档/分块/沉淀/陈旧/缺失 |
 | GET | `/api/knowledge/reuse?q=` | 从历史归档中检索可复用交付物 |
-| GET/POST | `/api/config` | 读取 / 更新模型服务配置（Key 掩码回显，永不返回明文） |
+| GET/POST | `/api/config` | 读取 / 更新模型服务配置（个人 Key 加密保存、掩码回显） |
 | POST | `/api/config/test` | 真实调用一次模型验证配置（不落盘） |
 | GET | `/api/knowledge` | 文档列表（含分块数） |
 | POST | `/api/knowledge/upload` | 上传单个文件 |
@@ -256,29 +266,32 @@ backend/data/clients/<client_id>/
 GitHub Actions 已配置 CI：每次 push / PR 自动跑后端 pytest、前端 vitest + 构建，以及 Docker 镜像构建。
 
 ```bash
-cd backend && .venv/bin/python -m pytest tests -q   # 后端 71 用例
-cd frontend && npm test                             # 前端 18 用例
+cd backend && .venv/bin/python -m pytest tests -q   # 离线后端回归
+cd frontend && npm test                             # 前端组件、API 与安全回归
 ```
 
 前端用例（Vitest + Testing Library，jsdom）：
 
-| 文件 | 用例数 | 覆盖点 |
-|---|---|---|
-| `api.test.ts` | 4 | 方案状态 PATCH 参数（status + plan_id）、任务拆解错误文案透出、执行/落盘响应解析 |
-| `PlanGroup.test.tsx` | 2 | 单方案直出卡片、多方案对比表（表头维度、推荐/已选/驳回行） |
-| `PlanCard.test.tsx` | 4 | 依据溯源渲染、确认按钮按 plan.id 提交、未落库禁用、多方案折叠与「恢复为候选」 |
-| `TaskBoard.test.tsx` | 5 | 拆解入口、执行后展示交付物、代码任务 diff + 批准落盘回传校验、丢弃、归档 |
-| `Composer.test.tsx` | 3 | 回车发送与清空、方案模式开关态、禁用时停止按钮 |
+| 文件 | 覆盖点 |
+|---|---|
+| `api.test.ts` | 方案状态 PATCH 参数（status + plan_id）、任务拆解错误文案透出、执行/落盘响应解析 |
+| `PlanGroup.test.tsx` | 单方案直出卡片、多方案对比表（表头维度、推荐/已选/驳回行） |
+| `PlanCard.test.tsx` | 依据溯源渲染、确认按钮按 plan.id 提交、未落库禁用、多方案折叠与「恢复为候选」 |
+| `TaskBoard.test.tsx` | 拆解入口、执行后展示交付物、代码任务 diff + 批准落盘回传校验、丢弃、归档 |
+| `MarkdownContent.test.tsx` | HTML/SVG 净化、严格图表与安全媒体 |
+| `apiBootstrap.test.ts` | 并行初始化、Cookie 被拦截时阻止业务请求 |
+| `Composer.test.tsx` | 回车发送与清空、方案模式开关态、禁用时停止按钮 |
 
-| 模块 | 用例数 | 覆盖点 |
-|---|---|---|
-| `test_store.py` | 9 | 会话增删改查、置顶排序、标题自动生成、空会话过滤、反馈持久化、历史顺序、反馈来源加权 |
-| `test_llm.py` | 15 | MockProvider 行为、错误码映射、思考模型 `reasoning_content`、流式 token/tool_calls 分片/reasoning/非法 JSON、Agent 增量 token |
-| `test_rag.py` | 6 | 入库增量、已删文件脏块清理、delete_source、LIKE 通配符转义、来源加权重排 |
-| `test_agent.py` | 10 | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验、SSRF 内网/重定向/IP 固定、方案依据来源校验 |
-| `test_plans.py` | 7 | 方案规范化与校验、多候选 SSE、选择互斥、单方案兼容、非法参数容错 |
-| `test_tasks.py` | 7 | 任务拆解与幂等、未确认方案拦截、文档交付、代码 diff 审批与落盘校验、绝对路径/穿越防护、任务状态守卫、文件数上限 |
-| `test_api.py` | 17 | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路/多 token 事件、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式、API Token/CORS、匿名工作区隔离 |
+| 模块 | 覆盖点 |
+|---|---|
+| `test_store.py` | 会话增删改查、置顶排序、标题自动生成、空会话过滤、反馈持久化、历史顺序、反馈来源加权 |
+| `test_llm.py` | MockProvider 行为、错误码映射、思考模型 `reasoning_content`、流式 token/tool_calls 分片/reasoning/非法 JSON、Agent 增量 token |
+| `test_rag.py` | 入库增量、已删文件脏块清理、delete_source、LIKE 通配符转义、来源加权重排 |
+| `test_agent.py` | RAG 检索、工具循环、阈值拒绝、未知工具、fetch_url 协议校验、SSRF 内网/重定向/IP 固定、方案依据来源校验 |
+| `test_plans.py` | 方案规范化与校验、多候选 SSE、选择互斥、单方案兼容、非法参数容错 |
+| `test_tasks.py` | 任务拆解与幂等、未确认方案拦截、文档交付、代码 diff 审批与落盘校验、绝对路径/穿越防护、任务状态守卫、文件数上限 |
+| `test_hardening.py` / `test_deploy.py` | 审批、文件故障、消息分支、快照冷恢复、个人 Key 与安全打包 |
+| `test_api.py` | TestClient 集成：健康检查、Key 掩码、会话生命周期、SSE 全链路/多 token 事件、反馈、TTS、文件夹上传、删除路径防护、多轮上下文去重、mock 模式、API Token/CORS、匿名工作区隔离 |
 
 真实链路（服务健康 → 配置连通 → 注入标记文档 → SSE 提问 → 断言检索命中 + 回答含标记 + 持久化 → 清理）：
 
@@ -291,7 +304,11 @@ cd backend && .venv/bin/python scripts/verify_real.py
 后端是 Python FastAPI（本地 ONNX embedding + SQLite 文件库 + 磁盘知识目录），
 **不适合** Cloudflare Workers（无法跑 Python/ONNX/文件系统）或 Supabase（仅是数据库 BaaS，非应用运行时）。
 
-### 方式一：Docker Compose（推荐）
+### 方式一：魔搭创空间免费试用（当前目标）
+
+见 [部署说明](docs/部署.md)。使用免费 CPU 和访客自己的 API Key；需绑定阿里云账号并完成实名。休眠、资源调度和存储可靠性受平台规则限制。
+
+### 方式二：Docker Compose（本机／自有主机）
 
 ```bash
 docker compose up -d --build
@@ -309,7 +326,7 @@ BIND_ADDR=0.0.0.0 docker compose up -d --build
 多阶段构建：前端 `npm run build` 产物由 FastAPI 托管（SPA 回退已内置），
 **单端口同时服务 API 与页面**。Docker 构建在 CI 中验证；依赖使用 `backend/requirements.lock` 锁定。
 
-### 方式二：手动部署
+### 方式三：手动部署
 
 ```bash
 npm --prefix frontend ci && npm --prefix frontend run build
@@ -319,7 +336,7 @@ cd backend && .venv/bin/pip install -r requirements.lock
 
 无 Docker 也能部署；`requirements.lock` 用于可复现安装，`requirements.txt` 保留开发期版本范围。
 
-前后端分离托管也可：前端 `dist/` 部署到 Vercel / Cloudflare Pages，后端单独部署并配置 CORS。
+前后端分离托管也可：前端 `dist/` 部署到 Vercel / Cloudflare Pages，后端单独部署；当前前端固定请求同源 `/api`，需要配置反向代理将该路径转发到后端，仅设置 CORS 不足以完成分离部署。
 
 ## 项目结构
 
@@ -336,10 +353,12 @@ llm-agent
 │   │   ├── plans.py       # 结构化方案：规范化校验、多方案选择
 │   │   ├── tasks.py       # 任务：拆解、执行、diff 生成与工作区落盘
 │   │   ├── tools.py       # search_knowledge / fetch_url / draft_plan
+│   │   ├── persistence.py # 一致性快照与重启恢复
+│   │   ├── secrets.py     # 个人 API Key 加密
 │   │   └── config.py      # 环境变量与阈值
 │   ├── knowledge/         # 知识库目录（samples/ 为示例文档）
 │   ├── scripts/verify_real.py
-│   └── tests/             # 50 个用例，离线可跑
+│   └── tests/             # 离线测试与故障回归
 ├── frontend/
 │   └── src/
 │       ├── pages/         # Home / Chat
@@ -359,3 +378,12 @@ llm-agent
 ## 📄 开源许可 (License)
 
 本项目遵循 [MIT License](LICENSE) 开源协议。
+
+## 接手修复与边界
+
+- 编辑／重新生成会更新数据库分支；后续存在执行中或已完成任务时拒绝改写，以保留交付追溯。
+- 方案确认始终互斥；代码审批重新核对确认状态与预览版本，整组校验失败不修改工作区。
+- 方案证据必须来自本轮检索且摘录能在原文中找到；空检索不生成假依据方案。
+- 当前任务为人工逐项执行的列表，尚无 DAG 调度、运行中强制取消或自动执行业务命令。进程重启遗留的 running 任务转为 failed，可重新执行。
+- 富文本保留安全格式、媒体与图表，过滤活动 HTML，图表启用严格模式并再次净化。
+- 设计决策见 [ADR](docs/adr/0001-anonymous-free-deployment.md)，修复记录见 [CHANGELOG](CHANGELOG.md)。

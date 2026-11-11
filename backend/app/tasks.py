@@ -6,8 +6,11 @@ P3 行动层：
   命令执行默认不做（安全边界；只做 py_compile / json 解析这类确定性校验）
 """
 import difflib
+import hashlib
 import json
+import os
 import re
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -184,7 +187,7 @@ def build_diffs(root: Path, files: List[Dict[str, str]]) -> List[Dict[str, Any]]
     """对比工作区现有内容，生成统一 diff（新文件按全新增处理）。"""
     out: List[Dict[str, Any]] = []
     for f in files:
-        target = root / f["path"]
+        target = _safe_target(root, f["path"])
         exists = target.is_file()
         old = target.read_text(encoding="utf-8", errors="replace") if exists else ""
         diff = list(difflib.unified_diff(
@@ -202,22 +205,68 @@ def build_diffs(root: Path, files: List[Dict[str, str]]) -> List[Dict[str, Any]]
             "removed": sum(1 for line in diff if line.startswith("-") and not line.startswith("---")),
             "diff": "\n".join(diff)[:12000],
             "content": f["content"],
+            "before_hash": hashlib.sha256(target.read_bytes()).hexdigest() if exists else None,
         })
     return out
 
 
-def apply_files(root: Path, files: List[Dict[str, str]]) -> List[str]:
-    """把文件写入沙箱根目录（调用方已完成路径白名单校验）。"""
+class FileValidationError(ValueError):
+    def __init__(self, checks: list[dict]):
+        super().__init__("文件校验未通过，工作区未改动")
+        self.checks = checks
+
+
+def _safe_target(root: Path, rel: str) -> Path:
+    target = (root / safe_relpath(rel)).resolve()
+    if root.resolve() not in target.parents:
+        raise ValueError(f"路径越界：{rel}")
+    return target
+
+
+def apply_files(root: Path, files: List[Dict[str, str]]) -> tuple[List[str], list[dict]]:
+    """先校验整组文件再替换；写入异常时恢复本次已经替换的文件。"""
     root = root.resolve()
-    written: List[str] = []
-    for f in files:
-        target = (root / f["path"]).resolve()
-        if root != target and root not in target.parents:
-            raise ValueError(f"路径越界：{f['path']}")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(f["content"], encoding="utf-8")
-        written.append(f["path"])
-    return written
+    root.parent.mkdir(parents=True, exist_ok=True)
+    written: list[str] = []
+    backups: dict[str, bytes | None] = {}
+    with tempfile.TemporaryDirectory(prefix=".apply-", dir=root.parent) as tmp:
+        staged = Path(tmp)
+        checks = []
+        for f in files:
+            rel = str(safe_relpath(f["path"]))
+            if rel in backups:
+                raise ValueError(f"重复文件路径：{rel}")
+            target = _safe_target(root, rel)
+            before = target.read_bytes() if target.is_file() else None
+            # 审批必须针对用户看到的版本，不能覆盖其他任务在预览后写入的内容。
+            actual_hash = hashlib.sha256(before).hexdigest() if before is not None else None
+            if "before_hash" not in f or actual_hash != f["before_hash"]:
+                raise ValueError(f"文件已变更，请重新执行并预览：{rel}")
+            backups[rel] = before
+            stage = staged / rel
+            stage.parent.mkdir(parents=True, exist_ok=True)
+            stage.write_text(f["content"], encoding="utf-8")
+            checks.append({**verify_file(stage), "path": rel})
+        if not all(c["ok"] for c in checks):
+            raise FileValidationError(checks)
+        try:
+            for rel in backups:
+                target = _safe_target(root, rel)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(staged / rel, target)
+                written.append(rel)
+        except Exception:
+            for rel in reversed(written):
+                target = _safe_target(root, rel)
+                before = backups[rel]
+                if before is None:
+                    target.unlink()
+                else:
+                    restore = staged / rel
+                    restore.write_bytes(before)
+                    os.replace(restore, target)
+            raise
+    return written, checks
 
 
 def verify_file(path: Path) -> Dict[str, Any]:
@@ -225,10 +274,7 @@ def verify_file(path: Path) -> Dict[str, Any]:
     suffix = path.suffix.lower()
     try:
         if suffix == ".py":
-            import py_compile
-
-            py_compile.compile(str(path), doraise=True, cfile=str(path) + ".pyc")
-            Path(str(path) + ".pyc").unlink(missing_ok=True)
+            compile(path.read_bytes(), str(path), "exec")
             return {"path": str(path.name), "ok": True, "detail": "Python 语法校验通过"}
         if suffix == ".json":
             json.loads(path.read_text(encoding="utf-8"))

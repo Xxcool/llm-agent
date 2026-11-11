@@ -67,6 +67,10 @@ class TaskProvider:
 
 
 def _chat_with_plan(tmp_app):
+    sample = tmp_app.KNOWLEDGE_ROOT / "samples/员工差旅与费用报销制度.md"
+    sample.parent.mkdir(parents=True, exist_ok=True)
+    sample.write_text("P1-P4 一线城市 450 元/晚", encoding="utf-8")
+    tmp_app._rag.ingest_dir(tmp_app.KNOWLEDGE_ROOT)
     tmp_app._provider = TaskProvider()
     sid = client.post("/api/sessions").json()["id"]
     r = client.post("/api/chat", json={"message": "给个报销线上化的方案", "session_id": sid, "plan_mode": True})

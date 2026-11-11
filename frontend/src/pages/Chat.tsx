@@ -24,6 +24,7 @@ export function ChatPage({
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [title, setTitle] = useState('')
   const [thinking, setThinking] = useState(false)
+  const [requestError, setRequestError] = useState('')
   const [typingId, setTypingId] = useState<number | null>(null)
   const [knowledgeOn, setKnowledgeOn] = useState(true)
   const [webOn, setWebOn] = useState(true)
@@ -171,7 +172,8 @@ export function ChatPage({
     }
   }, [messages])
 
-  const runStream = (text: string, withUserBubble: boolean) => {
+  const runStream = (text: string, withUserBubble: boolean, replaceFromId?: number) => {
+    setRequestError('')
     const assistantMsg: ChatMessage = { id: nextId++, role: 'assistant', content: '', steps: [] }
     if (withUserBubble) {
       const userMsg: ChatMessage = { id: nextId++, role: 'user', content: text, steps: [] }
@@ -193,7 +195,7 @@ export function ChatPage({
     streamChat(
       text,
       activeSessionRef.current,
-      { force_retrieval: knowledgeOn, allow_fetch: webOn, plan_mode: planMode },
+      { force_retrieval: knowledgeOn, allow_fetch: webOn, plan_mode: planMode, replace_from_id: replaceFromId },
       (event) => {
         switch (event.type) {
           case 'tool_call': {
@@ -230,6 +232,7 @@ export function ChatPage({
             })
             break
           case 'error':
+            setRequestError(event.message)
             patch((msg) => ({ ...msg, error: event.message }))
             break
           case 'done':
@@ -240,10 +243,13 @@ export function ChatPage({
     )
       .catch((e: unknown) => {
         if ((e as Error).name !== 'AbortError') {
+          setRequestError((e as Error).message)
           patch((msg) => ({ ...msg, error: `请求异常：${(e as Error).message}` }))
         }
       })
-      .finally(() => {
+      .finally(async () => {
+        // 先取回数据库 ID，再允许下一次发送，避免旧历史请求覆盖新一轮流式消息。
+        await loadMessages()
         thinkingRef.current = false
         setThinking(false)
         setTypingId(null)
@@ -251,7 +257,6 @@ export function ChatPage({
         refreshSessions()
         refreshTitle()
         // 静默重载：让新回复拿到数据库 id（反馈用）、落库时间戳与反馈状态
-        void loadMessages()
       })
   }
 
@@ -263,6 +268,8 @@ export function ChatPage({
       return
     }
     // 草稿新对话：首条消息发送时才创建会话（空会话不落库）
+    thinkingRef.current = true
+    setThinking(true)
     createSession()
       .then((s) => {
         activeSessionRef.current = s.id
@@ -271,7 +278,10 @@ export function ChatPage({
         onSessionCreated?.(s.id)
         runStream(trimmed, true)
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        thinkingRef.current = false
+        setThinking(false)
+        setRequestError((error as Error).message)
         setMessages((m) => [
           ...m,
           { id: nextId++, role: 'assistant', content: '', steps: [], error: '创建会话失败，请重试' },
@@ -288,9 +298,10 @@ export function ChatPage({
       .reverse()
       .find((m) => m.role === 'user')
       ?.content
-    if (!userText) return
+    const dbId = messages[idx].dbId
+    if (!userText || !dbId) return
     setMessages((m) => m.slice(0, idx))
-    runStream(userText, false)
+    runStream(userText, false, dbId)
   }
 
   /** 编辑用户提问：替换内容并丢弃其后的所有消息，再用新内容重新生成回答 */
@@ -298,10 +309,12 @@ export function ChatPage({
     if (thinkingRef.current) return
     const idx = messages.findIndex((m) => m.id === msgId)
     if (idx < 0) return
+    const dbId = messages[idx].dbId
+    if (!dbId) return
     setMessages((m) =>
       m.slice(0, idx + 1).map((x) => (x.id === msgId ? { ...x, content: newText } : x)),
     )
-    runStream(newText, false)
+    runStream(newText, false, dbId)
   }
 
   sendRef.current = send
@@ -315,6 +328,7 @@ export function ChatPage({
       <div className="chat-header">
         <span className="chat-header-title" title={title}>{title || '新会话'}</span>
       </div>
+      {requestError && <div className="chat-error" role="alert">{requestError}</div>}
       <main className="chat" ref={chatRef}>
         {messages.length === 0 && !thinking && (
           <div className="chat-empty">
@@ -341,15 +355,19 @@ export function ChatPage({
                   )}
                   {msg.dbId && (() => {
                     const confirmedPlan = msg.plans?.find((p) => p.status === 'confirmed')
-                    const tasks = tasksByMsg[msg.dbId!] ?? []
-                    if (!confirmedPlan && tasks.length === 0) return null
+                    if (!confirmedPlan) return null
+                    const tasks = (tasksByMsg[msg.dbId!] ?? []).filter((t) => t.plan_id === confirmedPlan.id)
                     const mid = msg.dbId!
                     return (
                       <TaskBoard
+                        key={`${mid}:${confirmedPlan.id}`}
                         messageId={mid}
-                        planId={confirmedPlan?.id}
+                        planId={confirmedPlan.id}
                         tasks={tasks}
-                        onTasks={(list) => setTasksByMsg((prev) => ({ ...prev, [mid]: list }))}
+                        onTasks={(list) => setTasksByMsg((prev) => ({
+                          ...prev,
+                          [mid]: [...(prev[mid] ?? []).filter((t) => t.plan_id !== confirmedPlan.id), ...list],
+                        }))}
                       />
                     )
                   })()}

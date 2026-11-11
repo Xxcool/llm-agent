@@ -3,6 +3,10 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(os.getenv("DATA_DIR", ROOT / "data"))
+# 创空间只把完整快照放到持久目录，SQLite 始终运行在本地文件系统。
+SNAPSHOT_DIR = os.getenv("SNAPSHOT_DIR", "").strip()
+REQUIRE_USER_API_KEY = os.getenv("REQUIRE_USER_API_KEY", "0").lower() in ("1", "true", "yes")
 
 # LLM（OpenAI 兼容：GLM / DeepSeek / Moonshot / Cloudflare AI Gateway 等均可）
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
@@ -31,7 +35,7 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "BAAI/bge-small-zh-v1.5")
 
 # 知识库文档目录与向量库文件
 KNOWLEDGE_DIR = Path(os.getenv("KNOWLEDGE_DIR", ROOT / "knowledge"))
-DB_PATH = Path(os.getenv("RAG_DB_PATH", ROOT / "data" / "rag.sqlite3"))
+DB_PATH = Path(os.getenv("RAG_DB_PATH", DATA_DIR / "rag.sqlite3"))
 # 匿名工作区根目录：每个浏览器一个独立子目录（chat/rag/knowledge/workspace/config）
 CLIENTS_DIR = Path(os.getenv("CLIENTS_DIR", DB_PATH.parent / "clients"))
 # 部署形态开关：1=多租户（每浏览器独立工作区，默认）；0=单租户（演示/单实例部署，
@@ -46,6 +50,7 @@ CLIENT_COOKIE_SECRET = os.getenv("CLIENT_COOKIE_SECRET", "").strip()
 CLIENT_COOKIE_NAME = "wa_client"
 # 是否给 Cookie 加 Secure（HTTPS 部署建议 true）
 CLIENT_COOKIE_SECURE = os.getenv("CLIENT_COOKIE_SECURE", "false").lower() == "true"
+MAX_OPEN_WORKSPACES = int(os.getenv("MAX_OPEN_WORKSPACES", "128"))
 
 # Agent
 MAX_TOOL_ROUNDS = int(os.getenv("MAX_TOOL_ROUNDS", "6"))

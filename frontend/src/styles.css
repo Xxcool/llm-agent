@@ -1604,3 +1604,14 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 托管平台嵌入预览可能拦截第三方 Cookie，直接页面使用浏览器工作区。 */
+.workspace-notice, .chat-error {
+  padding: 10px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  background: #fff6df;
+  color: #6b4300;
+  position: relative;
+  z-index: 2;
+}
+.workspace-notice a { margin-left: 8px; color: inherit; text-decoration: underline; }
