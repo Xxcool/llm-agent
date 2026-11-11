@@ -3,6 +3,7 @@
 import argparse
 import json
 import shutil
+import tarfile
 from pathlib import Path
 
 
@@ -52,6 +53,16 @@ def prepare(dest: Path, target: str) -> None:
     copy_tree(ROOT / "backend/knowledge/samples", kb / "samples")
     if target == "modelscope":
         (dest / ".dockerignore").write_text("**/data\n**/__pycache__\n**/.env*\n**/*.key\n.git\n", encoding="utf-8")
+        shutil.copy2(ROOT / "backend/requirements.lock", dest / "requirements.lock")
+        # 网页上传支持普通文件；将白名单内容压成一个包，避免手动逐层建立目录。
+        with tarfile.open(dest / "application.tar.gz", "w:gz") as tar:
+            for directory in (dest / "backend", dest / "frontend"):
+                for path in sorted(directory.rglob("*")):
+                    if path.is_file():
+                        tar.add(path, arcname=str(path.relative_to(dest)), recursive=False)
+        # 目标已通过完整所有权校验；这里只清理刚生成的打包中间文件。
+        shutil.rmtree(dest / "backend")
+        shutil.rmtree(dest / "frontend")
     manifest.write_text(json.dumps(sorted(str(p.relative_to(dest)) for p in dest.rglob("*") if p.is_file())))
     print(f"Prepared {target} package: {dest}")
 

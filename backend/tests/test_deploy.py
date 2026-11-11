@@ -1,5 +1,6 @@
 """部署工具不得同步私有资料、删除运行数据或覆盖未知目录。"""
 import importlib.util
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -35,9 +36,11 @@ def test_deployment_uses_public_allowlist(tmp_path):
     target = tmp_path / "package"
     tool.prepare(target, "modelscope")
     tool.prepare(target, "modelscope")
-    assert (target / "backend/app/main.py").is_file()
-    assert (target / "backend/knowledge/samples/public.md").is_file()
-    assert not any(p.name in ("private.md", "archive.md", "upload.md", "runtime_config.json") for p in target.rglob("*"))
+    with tarfile.open(target / "application.tar.gz") as tar:
+        names = tar.getnames()
+    assert "backend/app/main.py" in names
+    assert "backend/knowledge/samples/public.md" in names
+    assert not any(Path(name).name in ("private.md", "archive.md", "upload.md", "runtime_config.json") for name in names)
 
 
 def test_existing_runtime_data_are_preserved_on_refusal(tmp_path):

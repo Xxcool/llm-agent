@@ -61,3 +61,32 @@ jobs:
           docker rm "$frontend_container"
           python3 scripts/prepare_deploy.py output/modelscope --target modelscope
           docker build -t llm-agent:modelscope output/modelscope
+      - name: 验证免费部署入口与个人 Key 闸门
+        run: |
+          smoke_container=$(docker run -d --rm -p 127.0.0.1:17860:7860 llm-agent:modelscope)
+          trap 'docker stop "$smoke_container" >/dev/null' EXIT
+          python3 - <<'PY'
+          import json
+          import time
+          import urllib.error
+          import urllib.request
+
+          base = 'http://127.0.0.1:17860'
+          for attempt in range(40):
+              try:
+                  with urllib.request.urlopen(base + '/api/health', timeout=2) as response:
+                      assert json.load(response)['storage_ok'] is True
+                  break
+              except urllib.error.URLError:
+                  time.sleep(0.5)
+          else:
+              raise RuntimeError('Container did not become ready')
+          request = urllib.request.Request(base + '/api/chat', data=b'{"message":"test"}', headers={'Content-Type':'application/json'})
+          try:
+              urllib.request.urlopen(request, timeout=10)
+          except urllib.error.HTTPError as error:
+              assert error.code == 400
+          else:
+              raise AssertionError('Public deployment must require a personal API key')
+          print('ModelScope container is ready and enforces personal API keys')
+          PY
