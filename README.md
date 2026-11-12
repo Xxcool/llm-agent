@@ -167,7 +167,7 @@ LLM_MODEL=deepseek-flash
 | `RAG_SCORE_THRESHOLD` | `0.58` | 检索相似度阈值，低于阈值不硬凑无关内容 |
 | `MAX_TOOL_ROUNDS` | `6` | Agent 工具循环上限 |
 | `DATA_DIR` | `backend/data` | 运行数据目录；公开部署须持久保存或开启快照 |
-| `SNAPSHOT_DIR` | 空（关闭） | 独立快照目录；魔搭设为 `/mnt/workspace/llm-agent-snapshots`，SQLite 留在本地盘 |
+| `SNAPSHOT_DIR` | 空（关闭） | 可选独立快照目录；需要实际持久化存储支持，SQLite 留在本地盘 |
 | `REQUIRE_USER_API_KEY` | `0` | 设为 `1` 时，未配置个人 Key 的访问者不能调用模型 |
 | `CONFIG_ENCRYPTION_KEY` | 自动生成 | API Key 加密主密钥；自动生成时保存在数据目录，随快照备份 |
 | `MULTI_TENANT` | `1` | 公共平台保持 `1`，`0` 会让所有请求共用数据 |
@@ -337,10 +337,6 @@ cd backend && .venv/bin/pip install -r requirements.lock
 无 Docker 也能部署；`requirements.lock` 用于可复现安装，`requirements.txt` 保留开发期版本范围。
 
 前后端分离托管也可：前端 `dist/` 部署到 Vercel / Cloudflare Pages，后端单独部署；当前前端固定请求同源 `/api`，需要配置反向代理将该路径转发到后端，仅设置 CORS 不足以完成分离部署。
-
-### 魔搭创空间试用
-
-见 [部署说明](docs/部署.md)。使用免费 CPU 和访客自己的 API Key；需绑定阿里云账号并完成实名。嵌入预览包含平台外层界面，工作区保存可能受第三方 Cookie 限制；休眠、资源调度和存储可靠性受平台规则限制。
 
 ## 项目结构
 

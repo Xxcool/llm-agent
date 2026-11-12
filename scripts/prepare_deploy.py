@@ -78,7 +78,7 @@ def prepare(dest: Path, target: str) -> None:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("destination", type=Path)
-    parser.add_argument("--target", choices=("modelscope", "workbuddy"), default="modelscope")
+    parser.add_argument("--target", choices=("modelscope", "workbuddy"), default="workbuddy")
     args = parser.parse_args()
     prepare(args.destination, args.target)
 

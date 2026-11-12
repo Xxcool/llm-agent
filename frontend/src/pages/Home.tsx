@@ -1,37 +1,27 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { IconAlert, IconApi, IconBook, IconChat, IconCheck, IconDatabase, IconPlan, IconSparkle, IconWrench } from '../components/icons'
+import { IconAlert, IconApi, IconBolt, IconBook, IconChat, IconCheck, IconChevron, IconDatabase, IconPlan, IconSparkle, IconWrench } from '../components/icons'
 
-type FeatureAction = 'knowledge' | 'plan' | 'chat'
-
-const FEATURES: { icon: ReactNode; title: string; desc: string; action: FeatureAction; cta: string }[] = [
+const FEATURES: { icon: ReactNode; title: string; desc: string }[] = [
   {
     icon: <IconDatabase size={20} />,
-    title: 'RAG 检索增强',
-    desc: '企业文档按段落分块向量化，回答前检索最相关片段并标注来源文件，内容可追溯',
-    action: 'knowledge',
-    cta: '管理知识库',
+    title: '让回答有据可循',
+    desc: '从制度、文档与业务资料中寻找答案，标注来源，让每个结论都能回到原文。',
   },
   {
     icon: <IconPlan size={20} />,
-    title: '结构化方案',
-    desc: '基于检索证据生成实施方案：目标、步骤、依据与风险一目了然，人工确认后才进入执行',
-    action: 'plan',
-    cta: '生成一个方案',
+    title: '把想法整理成方案',
+    desc: '理清目标、步骤与风险，对比不同做法。由你确认，再逐项推进任务。',
   },
   {
     icon: <IconWrench size={20} />,
-    title: 'Function Calling',
-    desc: '智能体按需调用知识检索、网页抓取与方案生成工具，多轮闭环完成复杂任务',
-    action: 'chat',
-    cta: '看看工具调用',
+    title: '连接资料与更多线索',
+    desc: '结合知识检索与网页抓取补充信息，工具步骤清晰可见，复杂问题也能逐步拆解。',
   },
   {
     icon: <IconSparkle size={20} />,
-    title: 'SSE 流式输出',
-    desc: 'Fetch Stream 逐字呈现回答，工具调用与方案生成过程实时可视化',
-    action: 'chat',
-    cta: '体验流式输出',
+    title: '让思路自然展开',
+    desc: '回答逐步呈现，支持继续追问、重新生成与复制，让一次提问延伸成持续的交流。',
   },
 ]
 
@@ -43,7 +33,6 @@ export function Home({
   onOpenChat,
   onOpenSettings,
   onOpenKnowledge,
-  onStartPlan,
   onScrollChange,
   healthState,
   healthError,
@@ -56,19 +45,11 @@ export function Home({
   onOpenChat: () => void
   onOpenSettings: () => void
   onOpenKnowledge: () => void
-  /** 进入新对话并默认开启方案模式 */
-  onStartPlan: () => void
   onScrollChange: (scrolled: boolean) => void
   healthState?: string
   healthError?: string | null
 }) {
   const [ask, setAsk] = useState('')
-
-  const featureHandler = (action: FeatureAction) => {
-    if (action === 'knowledge') onOpenKnowledge()
-    else if (action === 'plan') onStartPlan()
-    else onOpenChat()
-  }
 
   return (
     <main
@@ -131,8 +112,8 @@ export function Home({
           onClick={onOpenSettings}
           title={healthState === 'error' ? healthError ?? undefined : undefined}
         >
-          {healthState === 'error' ? <IconAlert size={14} /> : isDemo ? <IconApi size={14} /> : <IconCheck size={14} />}
-          {healthState === 'error' ? '模型服务异常' : isDemo ? '接入模型服务' : '模型已接入'}
+          {healthState === 'error' ? <IconAlert size={14} /> : healthState === 'ok' && !isDemo ? <IconCheck size={14} /> : <IconApi size={14} />}
+          {healthState === 'error' ? '模型服务异常' : healthState === 'ok' && !isDemo ? '模型已接入' : '接入模型服务'}
         </button>
         <button className="quick-chip" onClick={onOpenKnowledge}>
           <IconBook size={14} />
@@ -140,26 +121,43 @@ export function Home({
         </button>
       </div>
 
-      <section className="hero-features">
-        {FEATURES.map((f, i) => (
-          <button
-            type="button"
-            className="feature-card"
-            key={f.title}
-            onClick={() => featureHandler(f.action)}
-          >
-            <span className="feature-num">{String(i + 1).padStart(2, '0')}</span>
-            <span className="feature-icon">{f.icon}</span>
-            <h3>{f.title}</h3>
-            <p>{f.desc}</p>
-            <span className="feature-cta">
-              {f.cta}
-              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden>
-                <path d="M3 8h9.4M9 4.4 12.6 8 9 11.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-          </button>
-        ))}
+      <section className="home-overview" aria-labelledby="home-overview-title">
+        <div className="home-section-heading">
+          <div>
+            <span className="home-eyebrow"><span />从知识到行动</span>
+            <h2 id="home-overview-title">不止于回答，更进一步</h2>
+            <p>找到依据，理清思路，让分散的知识成为下一步的起点。</p>
+          </div>
+          <span className="home-section-aside">你来提问，也由你掌握方向</span>
+        </div>
+        <div className="hero-features">
+          {FEATURES.map((f, i) => (
+            <article className="feature-card" key={f.title} aria-labelledby={`home-feature-${i}`}>
+              <span className="feature-num">{String(i + 1).padStart(2, '0')}</span>
+              <span className="feature-icon">{f.icon}</span>
+              <h3 id={`home-feature-${i}`}>{f.title}</h3>
+              <p>{f.desc}</p>
+            </article>
+          ))}
+        </div>
+        <div className="home-get-started">
+          <div className="home-get-started-title">
+            <span className="home-start-mark"><IconSparkle size={21} /></span>
+            <div>
+              <h3>简单三步，开启你的工作区</h3>
+              <p>用自己的模型，连接自己的知识。</p>
+            </div>
+          </div>
+          <ol className="home-start-steps" aria-label="开始使用步骤">
+            <li><button type="button" onClick={onOpenSettings}><span>01</span>接入模型<IconChevron size={12} /></button></li>
+            <li><button type="button" onClick={onOpenKnowledge}><span>02</span>添加资料<IconChevron size={12} /></button></li>
+            <li><button type="button" onClick={onOpenChat}><span>03</span>开始对话<IconChevron size={12} /></button></li>
+          </ol>
+        </div>
+        <footer className="home-footer">
+          <span className="home-footer-brand"><IconBolt size={15} />LLM Agent<span>企业知识智能体</span></span>
+          <p>AI 生成的内容仅供参考，请核对重要信息。</p>
+        </footer>
       </section>
     </main>
   )

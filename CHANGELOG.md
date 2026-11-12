@@ -2,6 +2,12 @@
 
 ## Unreleased — 2026-11-12
 
+### UI
+
+- Add illustrated conversation empty states and contextual setup actions.
+- Present home page capabilities as informational cards, with actionable getting-started steps and a footer; support narrow layouts and reduced motion.
+- Keep the model setup entry available until a connection is confirmed.
+
 ### Deployment
 
 - Add a WorkBuddy launch script that enforces anonymous workspace isolation, personal API keys, HTTPS cookies, and a single worker on port 3000.

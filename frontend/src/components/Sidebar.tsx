@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { deleteSession, listSessions, updateSession } from '../api'
 import type { SessionInfo } from '../api'
-import { IconApi, IconBolt, IconBook, IconX } from './icons'
+import { IconApi, IconBolt, IconBook, IconChat, IconChevron, IconSparkle, IconX } from './icons'
 import { ProviderMark } from './providerInfo'
 
 /** DeepSeek 式圆环加号（开启新对话） */
@@ -307,7 +307,22 @@ export function Sidebar({
 
       <div className="sess-list">
         {groups.length === 0 && (
-          <p className="sess-empty">暂无会话记录</p>
+          <div className="sb-empty" aria-label="暂无会话记录">
+            <div className="sb-empty-art" aria-hidden="true">
+              <span className="sb-empty-orbit" />
+              <span className="sb-empty-bubble back"><span /><span /></span>
+              <span className="sb-empty-bubble front"><IconChat size={25} /></span>
+              <span className="sb-empty-spark"><IconSparkle size={18} /></span>
+            </div>
+            <span className="sb-empty-eyebrow">你的对话空间</span>
+            <h3>从第一个问题开始</h3>
+            <p>聊聊你的想法，或从资料中寻找答案。开始后，对话会显示在这里。</p>
+            <button type="button" className="sb-empty-action" onClick={isDemo ? onOpenSettings : handleNew}>
+              {isDemo ? '先接入模型服务' : '开始第一段对话'}
+              <IconChevron size={13} />
+            </button>
+            <span className="sb-empty-hint">此浏览器的独立工作区</span>
+          </div>
         )}
         {groups.map((g) => (
           <div key={g.label}>

@@ -163,13 +163,18 @@ body {
 .quick-chip-primary svg { color: var(--accent); }
 .quick-chip-primary:hover { box-shadow: 0 4px 16px rgba(77, 107, 254, 0.22); }
 
-/* 首页下方功能区（提供滚动内容，配合导航收缩效果） */
+/* 首页功能区与引导收尾 */
+.home-overview { width: min(980px, 100%); margin-top: 68px; flex-shrink: 0; }
+.home-section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.home-eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 500; letter-spacing: 1.2px; color: #5b6d9b; }
+.home-eyebrow > span { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.home-section-heading h2 { margin: 7px 0 6px; font-size: 25px; font-weight: 550; letter-spacing: 0.5px; }
+.home-section-heading p { font-size: 13px; color: var(--text-dim); }
+.home-section-aside { font-size: 11.5px; color: #647087; white-space: nowrap; padding-bottom: 3px; }
 .hero-features {
-  width: min(980px, 92vw);
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px;
-  margin-top: 84px; padding-bottom: 48px;
 }
-/* 特性卡：玻璃质感 + 悬浮抬升 + 顶部光带 + 图标动效 + 进入箭头 */
+/* 能力卡只作介绍；具体操作集中在下方使用步骤。 */
 .feature-card {
   position: relative; overflow: hidden;
   display: flex; flex-direction: column; align-items: flex-start;
@@ -178,58 +183,55 @@ body {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 18px; padding: 22px 22px 20px;
+  border-radius: 18px; padding: 22px 24px 20px;
   box-shadow: 0 8px 28px rgba(31, 45, 80, 0.07);
-  cursor: pointer;
-  transition: transform 0.3s cubic-bezier(0.22, 0.75, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
-}
-.feature-card::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(77, 107, 254, 0.6), transparent);
-  opacity: 0; transition: opacity 0.3s ease;
-}
-.feature-card:hover {
-  transform: translateY(-5px);
-  border-color: rgba(77, 107, 254, 0.26);
-  box-shadow: 0 18px 44px rgba(31, 45, 80, 0.14);
-}
-.feature-card:hover::before { opacity: 1; }
-.feature-card:focus-visible {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 18px 44px rgba(31, 45, 80, 0.14);
 }
 .feature-num {
   position: absolute; top: 16px; right: 18px;
   font-size: 12px; letter-spacing: 0.1em; color: #c2cadb;
   font-variant-numeric: tabular-nums;
-  transition: color 0.3s ease;
 }
-.feature-card:hover .feature-num { color: rgba(77, 107, 254, 0.55); }
 .feature-icon {
   display: inline-flex; align-items: center; justify-content: center;
   width: 40px; height: 40px; border-radius: 12px;
   color: var(--accent);
   background: linear-gradient(135deg, rgba(77, 107, 254, 0.16), rgba(77, 107, 254, 0.06));
   margin-bottom: 14px;
-  transition: transform 0.3s cubic-bezier(0.22, 0.75, 0.3, 1), background 0.3s ease;
-}
-.feature-card:hover .feature-icon {
-  transform: translateY(-2px) scale(1.08) rotate(-3deg);
-  background: linear-gradient(135deg, rgba(77, 107, 254, 0.24), rgba(77, 107, 254, 0.1));
 }
 .feature-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
 .feature-card p { font-size: 13px; color: #5a6478; line-height: 1.65; }
-.feature-cta {
-  display: inline-flex; align-items: center; gap: 5px;
-  margin-top: 14px; font-size: 12.5px; color: var(--accent);
-  opacity: 0; transform: translateX(-6px);
-  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.22, 0.75, 0.3, 1);
+.home-get-started {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  margin-top: 24px; padding: 23px 25px;
+  background: linear-gradient(110deg, #eef2ff, rgba(246, 248, 255, 0.72));
+  border: 1px solid #e2e8fa; border-radius: 18px;
 }
-.feature-card:hover .feature-cta { opacity: 1; transform: translateX(0); }
-.feature-card:hover .feature-cta svg { transform: translateX(2px); transition: transform 0.3s ease; }
+.home-get-started-title { display: flex; align-items: center; gap: 13px; }
+.home-start-mark { display: grid; place-items: center; width: 41px; height: 41px; flex-shrink: 0; border-radius: 13px; background: #fff; color: var(--accent); box-shadow: 0 3px 10px #4d6bfe0a; }
+.home-get-started h3 { font-size: 14px; font-weight: 550; }
+.home-get-started p { margin-top: 3px; font-size: 12px; color: #6a7693; }
+.home-start-steps { display: flex; align-items: center; gap: 10px; list-style: none; }
+.home-start-steps button { display: flex; align-items: center; gap: 7px; padding: 9px 10px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: #3c4b72; font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.home-start-steps button > span { color: #566790; font-size: 10px; font-variant-numeric: tabular-nums; }
+.home-start-steps button:hover { background: #fff; border-color: #dce3f7; }
+.home-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 26px 2px 4px; margin-top: 25px; border-top: 1px solid #e7eaf0; }
+.home-footer-brand { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 550; color: #566079; }
+.home-footer-brand > svg { color: #6f83dc; }
+.home-footer-brand > span { padding-left: 10px; margin-left: 3px; border-left: 1px solid #dfe3ec; font-size: 11px; font-weight: 400; color: #647087; }
+.home-footer p { font-size: 11px; color: #647087; }
+.home-start-steps button:focus-visible, .sb-empty-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 760px) {
+  .home-overview { margin-top: 48px; }
+  .home-section-heading h2 { font-size: 22px; }
+  .home-section-aside { display: none; }
   .hero-features { grid-template-columns: 1fr; }
+  .home-get-started { flex-direction: column; align-items: flex-start; gap: 15px; padding: 21px; }
+  .home-start-steps { width: 100%; justify-content: space-between; gap: 0; }
+  .home-start-steps button { padding: 8px 4px; gap: 5px; }
+  .home-footer { flex-direction: column; align-items: flex-start; gap: 8px; padding-top: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-start-steps button, .sb-empty-action { transition: none; }
 }
 
 /* 入场动画：从下往上 */
@@ -355,6 +357,21 @@ body {
 .sess-list::-webkit-scrollbar { width: 6px; }
 .sess-list::-webkit-scrollbar-thumb { background: #d5dae4; border-radius: 3px; }
 .sess-empty { color: var(--text-dim); font-size: 12.5px; text-align: center; padding: 18px 0; }
+.sb-empty { display: flex; flex-direction: column; align-items: center; margin: 28px 4px 24px; padding: 24px 14px 17px; text-align: center; border: 1px solid #e7eaf3; border-radius: 16px; background: linear-gradient(165deg, #ffffffd9, #f0f3fc80); }
+.sb-empty-art { position: relative; width: 98px; height: 84px; margin-bottom: 13px; }
+.sb-empty-orbit { position: absolute; inset: 3px 10px; border: 1px dashed #d9e0f5; border-radius: 50%; transform: rotate(-18deg); }
+.sb-empty-bubble { position: absolute; display: flex; align-items: center; justify-content: center; border: 1px solid #dfe5f5; border-radius: 13px; }
+.sb-empty-bubble.back { top: 9px; right: 8px; flex-direction: column; align-items: flex-start; gap: 5px; width: 52px; height: 36px; padding-left: 11px; background: #edf1fc; transform: rotate(8deg); }
+.sb-empty-bubble.back > span { width: 23px; height: 3px; border-radius: 3px; background: #c5d1f4; }
+.sb-empty-bubble.back > span:last-child { width: 15px; }
+.sb-empty-bubble.front { top: 30px; left: 8px; width: 55px; height: 43px; background: #fff; color: #7086ec; box-shadow: 0 5px 13px #4d6bfe0d; transform: rotate(-7deg); }
+.sb-empty-spark { position: absolute; right: 5px; bottom: 7px; color: #8a9ce0; }
+.sb-empty-eyebrow { font-size: 10.5px; color: #647087; letter-spacing: 1.5px; margin-bottom: 6px; }
+.sb-empty h3 { font-size: 13.5px; font-weight: 550; color: #3c465c; }
+.sb-empty p { font-size: 12px; line-height: 1.85; color: #647087; margin: 8px 0 16px; }
+.sb-empty-action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border: 1px solid #e0e6fa; border-radius: 9px; background: #fff; color: #526bd0; font: inherit; font-size: 11.5px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.sb-empty-action:hover { border-color: #bac7f7; background: #f7f9ff; }
+.sb-empty-hint { margin-top: 13px; font-size: 10.5px; color: #647087; }
 .sess-group-label {
   font-size: 11.5px; color: #9aa3b5; padding: 12px 6px 6px;
   letter-spacing: 0.3px;
