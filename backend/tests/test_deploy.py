@@ -31,16 +31,43 @@ def _tool(tmp_path):
     return module
 
 
-def test_deployment_uses_public_allowlist(tmp_path):
+@pytest.mark.parametrize("target_name", ["modelscope", "workbuddy"])
+def test_deployment_uses_public_allowlist(tmp_path, target_name):
     tool = _tool(tmp_path)
     target = tmp_path / "package"
-    tool.prepare(target, "modelscope")
-    tool.prepare(target, "modelscope")
-    with tarfile.open(target / "application.tar.gz") as tar:
-        names = tar.getnames()
-    assert "backend/app/main.py" in names
-    assert "backend/knowledge/samples/public.md" in names
+    tool.prepare(target, target_name)
+    tool.prepare(target, target_name)
+    if target_name == "modelscope":
+        with tarfile.open(target / "application.tar.gz") as tar:
+            names = tar.getnames()
+        assert "backend/app/main.py" in names
+        assert "backend/knowledge/samples/public.md" in names
+    else:
+        names = [str(p.relative_to(target)) for p in target.rglob("*") if p.is_file()]
+        assert "app/main.py" in names
+        assert "knowledge/samples/public.md" in names
     assert not any(Path(name).name in ("private.md", "archive.md", "upload.md", "runtime_config.json") for name in names)
+
+
+def test_workbuddy_launcher_overrides_unsafe_shared_mode(tmp_path):
+    import os
+    import subprocess
+
+    tool = _tool(tmp_path)
+    target = tmp_path / "package"
+    tool.prepare(target, "workbuddy")
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    uvicorn = binary / "uvicorn"
+    uvicorn.write_text('#!/bin/sh\nprintf "%s\\n" "$MULTI_TENANT" "$REQUIRE_USER_API_KEY" "$CLIENT_COOKIE_SECURE" "$STATIC_DIR" "$DATA_DIR" "$@"\n')
+    uvicorn.chmod(0o755)
+    result = subprocess.run(
+        ["sh", "start.sh"], cwd=target, text=True, capture_output=True, check=True,
+        env={**os.environ, "PATH": f"{binary}:{os.environ['PATH']}", "MULTI_TENANT": "0", "REQUIRE_USER_API_KEY": "0"},
+    )
+    assert result.stdout.splitlines() == [
+        "1", "1", "true", "static", "data", "app.main:app", "--host", "0.0.0.0", "--port", "3000", "--workers", "1",
+    ]
 
 
 def test_existing_runtime_data_are_preserved_on_refusal(tmp_path):

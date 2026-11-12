@@ -304,6 +304,10 @@ cd backend && .venv/bin/python scripts/verify_real.py
 后端是 Python FastAPI（本地 ONNX embedding + SQLite 文件库 + 磁盘知识目录），
 **不适合** Cloudflare Workers（无法跑 Python/ONNX/文件系统）或 Supabase（仅是数据库 BaaS，非应用运行时）。
 
+### WorkBuddy 应用发布（当前试用）
+
+运行 `bash scripts/sync_deploy.sh` 生成部署包，再通过 WorkBuddy 发布。启动脚本已开启浏览器工作区隔离和个人 Key 要求，无需访客登录。发布参数及沙箱数据保存限制见 [部署说明](docs/部署.md#workbuddy-应用发布当前试用)。
+
 ### Docker Compose（本机／自有主机）
 
 ```bash

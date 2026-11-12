@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## Unreleased — 2026-11-12
+
+### Deployment
+
+- Add a WorkBuddy launch script that enforces anonymous workspace isolation, personal API keys, HTTPS cookies, and a single worker on port 3000.
+- Document WorkBuddy publishing parameters and sandbox data retention limits.
+
 ## Unreleased — 2026-11-11
 
 ### Fixed

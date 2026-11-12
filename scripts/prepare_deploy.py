@@ -48,6 +48,14 @@ def prepare(dest: Path, target: str) -> None:
         copy_tree(ROOT / "backend/app", dest / "app")
         copy_tree(ROOT / "frontend/dist", dest / "static")
         shutil.copy2(ROOT / "backend/requirements.txt", dest / "requirements.txt")
+        (dest / "start.sh").write_text(
+            "#!/usr/bin/env sh\nset -eu\n"
+            "# 公开试用保持浏览器隔离，并要求各自配置模型 Key。\n"
+            "export EMBED_BACKEND=hash MULTI_TENANT=1 REQUIRE_USER_API_KEY=1\n"
+            "export CLIENT_COOKIE_SECURE=true STATIC_DIR=static KNOWLEDGE_DIR=knowledge DATA_DIR=data\n"
+            "exec uvicorn app.main:app --host 0.0.0.0 --port 3000 --workers 1\n",
+            encoding="utf-8",
+        )
     # 只同步公开示例；不遍历 uploads、personal、沉淀或任何运行数据目录。
     kb = dest / ("backend/knowledge" if target == "modelscope" else "knowledge")
     copy_tree(ROOT / "backend/knowledge/samples", kb / "samples")
