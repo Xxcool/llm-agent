@@ -1,6 +1,6 @@
 # LLM Agent 智能对话平台
 
-> **部署方向**：魔搭创空间免费 CPU，访客免登录、各自配置 API Key、浏览器工作区互相隔离。部署步骤见 [部署说明](docs/部署.md)。免费资源可能休眠，不承诺常驻可用性。
+> **运行方式**：支持本机运行、Docker Compose 和自有主机部署。访客免登录，各自配置 API Key，浏览器工作区互相隔离。
 
 **企业知识驱动的 AI 智能体**：从知识库检索增强，到基于证据的**多方案对比与人工确认**，
 再到方案拆解为任务、逐项执行产出交付物——让企业知识从「问答」走向「交付」。
@@ -304,11 +304,7 @@ cd backend && .venv/bin/python scripts/verify_real.py
 后端是 Python FastAPI（本地 ONNX embedding + SQLite 文件库 + 磁盘知识目录），
 **不适合** Cloudflare Workers（无法跑 Python/ONNX/文件系统）或 Supabase（仅是数据库 BaaS，非应用运行时）。
 
-### 方式一：魔搭创空间免费试用（当前目标）
-
-见 [部署说明](docs/部署.md)。使用免费 CPU 和访客自己的 API Key；需绑定阿里云账号并完成实名。休眠、资源调度和存储可靠性受平台规则限制。
-
-### 方式二：Docker Compose（本机／自有主机）
+### Docker Compose（本机／自有主机）
 
 ```bash
 docker compose up -d --build
@@ -326,7 +322,7 @@ BIND_ADDR=0.0.0.0 docker compose up -d --build
 多阶段构建：前端 `npm run build` 产物由 FastAPI 托管（SPA 回退已内置），
 **单端口同时服务 API 与页面**。Docker 构建在 CI 中验证；依赖使用 `backend/requirements.lock` 锁定。
 
-### 方式三：手动部署
+### 手动部署
 
 ```bash
 npm --prefix frontend ci && npm --prefix frontend run build
@@ -337,6 +333,10 @@ cd backend && .venv/bin/pip install -r requirements.lock
 无 Docker 也能部署；`requirements.lock` 用于可复现安装，`requirements.txt` 保留开发期版本范围。
 
 前后端分离托管也可：前端 `dist/` 部署到 Vercel / Cloudflare Pages，后端单独部署；当前前端固定请求同源 `/api`，需要配置反向代理将该路径转发到后端，仅设置 CORS 不足以完成分离部署。
+
+### 魔搭创空间试用
+
+见 [部署说明](docs/部署.md)。使用免费 CPU 和访客自己的 API Key；需绑定阿里云账号并完成实名。嵌入预览包含平台外层界面，工作区保存可能受第三方 Cookie 限制；休眠、资源调度和存储可靠性受平台规则限制。
 
 ## 项目结构
 
@@ -378,12 +378,3 @@ llm-agent
 ## 📄 开源许可 (License)
 
 本项目遵循 [MIT License](LICENSE) 开源协议。
-
-## 接手修复与边界
-
-- 编辑／重新生成会更新数据库分支；后续存在执行中或已完成任务时拒绝改写，以保留交付追溯。
-- 方案确认始终互斥；代码审批重新核对确认状态与预览版本，整组校验失败不修改工作区。
-- 方案证据必须来自本轮检索且摘录能在原文中找到；空检索不生成假依据方案。
-- 当前任务为人工逐项执行的列表，尚无 DAG 调度、运行中强制取消或自动执行业务命令。进程重启遗留的 running 任务转为 failed，可重新执行。
-- 富文本保留安全格式、媒体与图表，过滤活动 HTML，图表启用严格模式并再次净化。
-- 设计决策见 [ADR](docs/adr/0001-anonymous-free-deployment.md)，修复记录见 [CHANGELOG](CHANGELOG.md)。
